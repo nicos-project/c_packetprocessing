@@ -1,0 +1,10 @@
+{
+    "C_Cpp.default.includePath": [
+        "/opt/netronome/components/standardlibrary/microc/include",
+        "./microc/include",
+        "./microc/lib"
+    ],
+    "files.associations": {
+        "stdint.h": "c"
+    }
+}

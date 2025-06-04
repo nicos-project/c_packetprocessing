@@ -27,6 +27,7 @@
 
 /* Flowenv */
 #include <nfp.h>
+#include <nfp_intrinsic.h>
 #include <stdint.h>
 
 #include <pkt/pkt.h>
@@ -69,6 +70,8 @@ struct counters {
     uint64_t vlan_2;
     uint64_t vlan_3;
     uint64_t vlan_other;
+    uint64_t i32_rx;
+    uint64_t i33_rx;
 };
 
 struct statistics {
@@ -176,6 +179,13 @@ count_packet( struct pkt_rxed *pkt_rxed,
         } else {
             mem_incr64(&counters.vlan_other);
         }
+    }
+
+    if(_island() == 32){
+        mem_incr64(&counters.i32_rx);
+    }
+    else if(_island() == 33){
+        mem_incr64(&counters.i33_rx);
     }
 }
 

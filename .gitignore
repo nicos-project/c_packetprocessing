@@ -1,5 +1,7 @@
 *~
 .vscode
+
+*.txt
 *.fw
 *.uci
 *.ucp

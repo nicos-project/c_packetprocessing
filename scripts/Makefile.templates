@@ -139,6 +139,33 @@ endif
 
 endef
 
+#f micro_c.add_std_lib
+#
+# Add a single standard source library to a Micro-c compilation
+#
+# @param $1	object descriptor
+# @param $2	source code
+#
+define micro_c.add_std_lib
+
+OBJ_$1__CLIBS        += $(NFP_STD_LIB)/microc/src/$2.c
+OBJ_$1__DEPENDENCIES += $(NFP_STD_LIB)/microc/src/$2.c
+
+endef
+
+#f micro_c.add_std_libs
+#
+# Add a list of standard libraries to a Micro-c compilation
+#
+# @param $1	object descriptor
+# @param $2	list of library names
+#
+define micro_c.add_std_libs
+
+$(foreach lib,$2,$(eval $(call micro_c.add_std_lib,$1,$(lib))))
+
+endef
+
 #f micro_c.add_fw_lib
 #
 # Add a single firmware library to a Micro-c compilation
