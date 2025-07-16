@@ -19,8 +19,7 @@
  * This application acts as a "wire" which by default will return packets
  * back out on the port they were received on.
  *
- *
- * It also doubles up as test code for the header extract
+ * * It also doubles up as test code for the header extract
  * code. The packet headers are extracted and counts are maintained
  * for different types of packets.
  */
@@ -195,18 +194,19 @@ send_packet( struct nbi_meta_catamaran *nbi_meta,
     pnum   = nbi_meta->pkt_info.pnum;
     pbuf   = pkt_ctm_ptr40(island, pnum, 0);
     plen   = nbi_meta->pkt_info.len - MAC_PREPEND_BYTES;
-
     /* Set egress tm queue.
      * Set tm_que to mirror pkt to port on which in ingressed. */
     q_dst  = PORT_TO_CHANNEL(nbi_meta->port);
 
     pkt_mac_egress_cmd_write(pbuf, pkt_off, 1, 1); // Write data to make the packet MAC egress generate L3 and L4 checksums
 
-    msi = pkt_msd_write(pbuf, pkt_off); // Write a packet modification script of NULL
+	DEBUG(0xe, nbi_meta->port, q_dst, 0);
+
+    msi = pkt_msd_write(pbuf, pkt_off - 4); // Write a packet modification script of NULL
     pkt_nbi_send(island,
                  pnum,
                  &msi,
-                 plen,
+                 plen + 4,
                  NBI,
                  q_dst,
                  nbi_meta->seqr,
@@ -241,7 +241,7 @@ main(void)
         count_packet(&pkt_rxed, pkt_hdr);
 
         /* Do stats on the packet */
-        //stats_packet(&pkt_rxed, pkt_hdr);
+        stats_packet(&pkt_rxed, pkt_hdr);
 
         /* Send the packet */
         send_packet(&pkt_rxed.nbi_meta, pkt_hdr);

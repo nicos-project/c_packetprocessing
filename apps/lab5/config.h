@@ -27,7 +27,7 @@
  */
 #define CFG_RX_CSUM_PREPEND
 #define PKT_NBI_OFFSET          64
-#define MAC_PREPEND_BYTES       4
+#define MAC_PREPEND_BYTES       8
 
 /*
  * Mapping between channel and TM queue
