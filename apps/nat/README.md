@@ -9,7 +9,7 @@ To build the application and load it on to the NIC:
 
 On system reboots, initialize the Mellanox NIC using:
 
-`./mlx_iface_init.sh`
+`./mlx_iface_init.sh <iface>`
 
 ## Testing
 You can use `test_nat.py` to run correctness checks on the implementation. Ensure that both ports of the Netronome NIC are connected to the Mellanox NIC. The testing configuration uses a loopback setup where the Mellanox NIC sends UDP packets to Netronome LAN or WAN interface, the Netronome performs the NAT translation and mirrors packets back to the Mellanox NIC for verification. By default the testing script uses 1024 LAN clients and 63 ports for each client (64512 connections in total). You can run `sudo python3 test_nat.py 2` to run the test for 64512 connections for 2 packets in each direction (LAN to WAN and WAN to LAN).
