@@ -12,7 +12,7 @@ import os
 from datetime import datetime
 
 num_ports_per_client = 63
-num_clients = 512
+num_clients = 1024
 
 lan_iface = "enp94s0f0np0"
 lan_udp_src_port_start = 4096
