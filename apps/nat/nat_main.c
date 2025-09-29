@@ -79,7 +79,7 @@ struct nat_wtl_lkup_value {
 
 __declspec(imem export scope(global)) struct nat_wtl_lkup_value nat_wtl_lkup_values[WAN_PORT_POOL_SIZE];
 
-__intrinsic void add_to_table(__declspec(imem) struct mem_lkup_cam_r_48_64B_table_bucket_entry *table,
+__intrinsic void add_to_ltw_nat_table(__declspec(imem) struct mem_lkup_cam_r_48_64B_table_bucket_entry *table,
                               __declspec(cls shared) uint8_t *bucket_count, uint32_t table_idx,
                               uint64_t lkup_data, uint32_t result,
                               __declspec(ctm shared) __mem40 uint32_t *data) {
@@ -160,9 +160,9 @@ int main(void)
         __gpr uint32_t table_idx;
         __gpr uint16_t nat_wtl_lkup_idx = 0;
         __declspec(local_mem shared) struct nat_ltw_lkup_key ltw_lkup_key;
-        __declspec(local_mem shared) unsigned long key_shf;
-        __declspec(local_mem shared) uint64_t lkup_data_48_shf;
-        __xrw uint32_t hash_lkup_key_value[2];
+        __declspec(local_mem shared) unsigned long nat_ltw_lkup_key_shf;
+        __declspec(local_mem shared) uint64_t nat_ltw_lkup_data; // this is what actually goes in the CAM (right-shifted result of ltw_lkup_key.word64 by nat_ltw_lkup_key_shf)
+        __xrw uint32_t nat_ltw_lkup_key_result[2];
         __declspec(cls shared) uint8_t ltw_bucket_count[NUM_BUCKETS];
 
         for (i = 0; i < NUM_BUCKETS; i++) {
@@ -173,7 +173,7 @@ int main(void)
             nat_wtl_lkup_values[i].word64 = 0;
         }
 
-        key_shf = MEM_LKUP_CAM_64B_KEY_OFFSET(DATA_OFFSET, sizeof(nat_ltw_lkup_table));
+        nat_ltw_lkup_key_shf = MEM_LKUP_CAM_64B_KEY_OFFSET(DATA_OFFSET, sizeof(nat_ltw_lkup_table));
 
         for (;;) {
             // Receive a packet
@@ -211,21 +211,21 @@ int main(void)
                 ltw_lkup_key.word[1] = ip_udp_src_hash;
 
                 // NAT TABLE LOOKUP OPERATIONS
-                hash_lkup_key_value[0] = ltw_lkup_key.word[1];
-                hash_lkup_key_value[1] = ltw_lkup_key.word[0];
-                mem_lkup_cam_r_48_64B(hash_lkup_key_value, (__mem40 void *) nat_ltw_lkup_table,
-                                      DATA_OFFSET, sizeof(hash_lkup_key_value),
+                nat_ltw_lkup_key_result[0] = ltw_lkup_key.word[1];
+                nat_ltw_lkup_key_result[1] = ltw_lkup_key.word[0];
+                mem_lkup_cam_r_48_64B(nat_ltw_lkup_key_result, (__mem40 void *) nat_ltw_lkup_table,
+                                      DATA_OFFSET, sizeof(nat_ltw_lkup_key_result),
                                       sizeof(nat_ltw_lkup_table));
 
-                if (hash_lkup_key_value[0]) {
+                if (nat_ltw_lkup_key_result[0]) {
                     // key was found in the CAM
-                    wan_port = hash_lkup_key_value[0];
+                    wan_port = nat_ltw_lkup_key_result[0];
                 }
                 else {
                     table_idx = ltw_lkup_key.word[1] & (MEM_LKUP_CAM_64B_NUM_ENTRIES(sizeof(nat_ltw_lkup_table)) - 1);
 
-                    lkup_data_48_shf = ltw_lkup_key.word64 >> (uint64_t)key_shf;
-                    add_to_table(nat_ltw_lkup_table, ltw_bucket_count, table_idx, lkup_data_48_shf, cur_wan_port, data);
+                    nat_ltw_lkup_data = ltw_lkup_key.word64 >> (uint64_t)nat_ltw_lkup_key_shf;
+                    add_to_ltw_nat_table(nat_ltw_lkup_table, ltw_bucket_count, table_idx, nat_ltw_lkup_data, cur_wan_port, data);
                     wan_port = cur_wan_port++;
 
                     // Update the WAN to LAN mapping too
