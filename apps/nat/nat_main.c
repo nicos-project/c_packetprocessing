@@ -154,7 +154,7 @@ int main(void)
         __declspec(ctm shared) __mem40 uint16_t *udp_dst_port;
         __declspec(ctm shared) __mem40 uint32_t *ip_dst_addr;
         __declspec(ctm shared) __mem40 uint32_t *data;
-        __declspec(local_mem shared) uint32_t key_hash;
+        __declspec(local_mem shared) uint32_t ip_udp_src_hash;
 
         // Lookup table stuff
         __gpr uint32_t table_idx;
@@ -203,14 +203,12 @@ int main(void)
                 ltw_lkup_key.ip_src = *ip_src_addr;
                 ltw_lkup_key.udp_src = *udp_src_port;
 
-                // store a right shifted value so that we remove the 16 bits from the end and make it 48 bits
-                // we basically just removed the __unused variable
-                ltw_lkup_key.word64 = ltw_lkup_key.word64 >> 16ull;
+                *data = ltw_lkup_key.word[1];
 
                 // hash the word to randomize the bucket index
-                key_hash = hash_me_crc32(&ltw_lkup_key.word[1], 4, HASH_SEED_VALUE);
+                ip_udp_src_hash = hash_me_crc32(&ltw_lkup_key.word64, 8, HASH_SEED_VALUE);
 
-                ltw_lkup_key.word[1] = key_hash;
+                ltw_lkup_key.word[1] = ip_udp_src_hash;
 
                 // NAT TABLE LOOKUP OPERATIONS
                 hash_lkup_key_value[0] = ltw_lkup_key.word[1];
