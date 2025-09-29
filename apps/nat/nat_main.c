@@ -23,14 +23,14 @@
 // In total we can support 98304 outgoing connections on
 // the LAN interface but we are limited by the size of
 // the WAN_PORT_POOL_SIZE which is ~64K ports (see below).
-#define NUM_BUCKETS  (1 << 14)
-#define TABLE_SZ_64    (NUM_BUCKETS * 64)
-#define TBL_MEM __imem
+#define NAT_LTW_TABLE_NUM_BUCKETS  (1 << 14)
+#define TABLE_SZ_64    (NAT_LTW_TABLE_NUM_BUCKETS * 64)
+#define NAT_LTW_TABLE_MEM __imem
 #define DATA_OFFSET 0
-#define MAX_KEYS_PER_BUCKET 6
-__export TBL_MEM __align(TABLE_SZ_64)                           \
+#define NAT_LTW_TABLE_MAX_KEYS_PER_BUCKET 6
+__export NAT_LTW_TABLE_MEM __align(TABLE_SZ_64)                           \
                 struct mem_lkup_cam_r_48_64B_table_bucket_entry \
-                nat_ltw_lkup_table[NUM_BUCKETS];
+                nat_ltw_lkup_table[NAT_LTW_TABLE_NUM_BUCKETS];
 #define HASH_SEED_VALUE 0x12345678
 
 // Avoiding the well-known ports (0-1023)
@@ -83,7 +83,7 @@ __intrinsic void add_to_ltw_nat_table(__declspec(imem) struct mem_lkup_cam_r_48_
                               __declspec(cls shared) uint8_t *bucket_count, uint32_t table_idx,
                               uint64_t lkup_data, uint32_t result,
                               __declspec(ctm shared) __mem40 uint32_t *data) {
-        if (bucket_count[table_idx] < MAX_KEYS_PER_BUCKET) {
+        if (bucket_count[table_idx] < NAT_LTW_TABLE_MAX_KEYS_PER_BUCKET) {
             if (bucket_count[table_idx] == 0) {
                 // key 0 and result 0 are in dataline1
                 table[table_idx].dataline1.lookup_key_lower0 = (lkup_data & 0xffff);
@@ -163,9 +163,9 @@ int main(void)
         __declspec(local_mem shared) unsigned long nat_ltw_lkup_key_shf;
         __declspec(local_mem shared) uint64_t nat_ltw_lkup_data; // this is what actually goes in the CAM (right-shifted result of ltw_lkup_key.word64 by nat_ltw_lkup_key_shf)
         __xrw uint32_t nat_ltw_lkup_key_result[2];
-        __declspec(cls shared) uint8_t ltw_bucket_count[NUM_BUCKETS];
+        __declspec(cls shared) uint8_t ltw_bucket_count[NAT_LTW_TABLE_NUM_BUCKETS];
 
-        for (i = 0; i < NUM_BUCKETS; i++) {
+        for (i = 0; i < NAT_LTW_TABLE_NUM_BUCKETS; i++) {
             ltw_bucket_count[i] = 0;
         }
 
