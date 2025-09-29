@@ -222,7 +222,6 @@ int main(void)
                     wan_port = hash_lkup_key_value[0];
                 }
                 else {
-                    // why does it only work when we set the table_idx like this? why does lkup_key.word[0] not work?
                     table_idx = ltw_lkup_key.word[1] & (MEM_LKUP_CAM_64B_NUM_ENTRIES(sizeof(nat_ltw_lkup_table)) - 1);
 
                     lkup_data_48_shf = ltw_lkup_key.word64 >> (uint64_t)key_shf;
