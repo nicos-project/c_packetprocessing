@@ -198,7 +198,8 @@ int main(void)
     // Just use one thread for now
     if (__ctx() == 0) {
         __gpr struct pkt_ms_info msi;
-        __gpr int in_port, pkt_off;
+        __gpr int in_port;
+        __gpr uint8_t pkt_off = PKT_NBI_OFFSET + MAC_PREPEND_BYTES;
         __gpr int i;
         __gpr uint16_t cur_wan_port = WAN_PORT_START;
         __gpr uint16_t wan_port = 0;
@@ -251,8 +252,6 @@ int main(void)
             pkt_nbi_recv(&nbi_meta, sizeof(nbi_meta));
             in_port = MAC_TO_PORT(nbi_meta.port);
             pbuf = pkt_ctm_ptr40(pi->isl, pi->pnum, 0);
-            pkt_off = PKT_NBI_OFFSET;
-            pkt_off += MAC_PREPEND_BYTES;
 
             // maybe use ip/udp header structures instead of doing it on an offset basis
             ip_src_addr = (__mem40 uint32_t *)(pbuf + pkt_off
@@ -292,6 +291,7 @@ int main(void)
                 for (i = 0; i < 4; i++) {
                     ct_lkup_key.word[i] = 0;
                 }
+
                 ct_lkup_key.src_ip = *ip_src_addr;
                 ct_lkup_key.dst_ip = *ip_dst_addr;
                 ct_lkup_key.src_dst_udp = *udp_src_port;
@@ -431,8 +431,7 @@ int main(void)
 
             // Send the packet
             pkt_mac_egress_cmd_write(pbuf, pkt_off, 1, 1);
-            pkt_off -= 4;
-            msi = pkt_msd_write(pbuf, pkt_off);
+            msi = pkt_msd_write(pbuf, pkt_off - 4);
             pkt_nbi_send(pi->isl,
                          pi->pnum,
                          &msi,
