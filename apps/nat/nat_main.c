@@ -221,18 +221,22 @@ int main(void)
         __declspec(local_mem shared) uint64_t nat_ltw_lkup_data; // this is what actually goes in the CAM (right-shifted result of ltw_lkup_key.word64 by nat_ltw_lkup_key_shf)
         __xrw uint32_t nat_ltw_lkup_key_result[2];
         __declspec(cls shared) uint8_t ltw_bucket_count[NAT_LTW_TABLE_NUM_BUCKETS];
-        __declspec(cls shared) uint8_t ct_bucket_count[CONN_TABLE_NUM_BUCKETS];
 
         // Connection table stuff
         __xwrite uint32_t conn_table_entry_data[4];
         __xrw uint32_t conn_table_lkup_data[4];
         __declspec(local_mem shared) unsigned int conn_table_lkup_key_shf;
         __declspec(local_mem shared) struct conn_table_lkup_key ct_lkup_key;
+        __declspec(cls shared) uint8_t ct_bucket_count[CONN_TABLE_NUM_BUCKETS];
         __gpr uint32_t five_tuple_hash;
 
 
         for (i = 0; i < NAT_LTW_TABLE_NUM_BUCKETS; i++) {
             ltw_bucket_count[i] = 0;
+        }
+
+        for (i = 0; i < CONN_TABLE_NUM_BUCKETS; i++) {
+            ct_bucket_count[i] = 0;
         }
 
         for (i = 0; i < WAN_PORT_POOL_SIZE; i++) {
