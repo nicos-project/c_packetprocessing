@@ -14,10 +14,6 @@
 #include "config.h"
 
 #define WAN_IP_HEX 0x36EF1C55 // 54.239.28.85
-#define IP_HDR_SOURCE_OFF 12
-#define IP_HDR_DESTINATION_OFF 16
-#define IP_HDR_PROTOCOL_OFF 9
-#define UDP_HDR_DESTINATION_OFF 2
 
 // LAN to WAN table
 // CAM-R based lookup table with 16384 buckets
@@ -206,12 +202,11 @@ int main(void)
         __xread struct nbi_meta_catamaran nbi_meta;
         __xread struct nbi_meta_pkt_info *pi = &nbi_meta.pkt_info;
         __declspec(ctm shared) __mem40 char *pbuf;
-        __declspec(ctm shared) __mem40 uint16_t *udp_src_port;
-        __declspec(ctm shared) __mem40 uint32_t *ip_src_addr;
-        __declspec(ctm shared) __mem40 uint16_t *udp_dst_port;
-        __declspec(ctm shared) __mem40 uint32_t *ip_dst_addr;
+        __declspec(ctm shared) __mem40 struct ip4_hdr *ip_hdr;
+        __declspec(ctm shared) __mem40 struct udp_hdr *udp_hdr;
+        __declspec(ctm shared) __mem40 uint16_t *l4_src_port;
+        __declspec(ctm shared) __mem40 uint16_t *l4_dst_port;
         __declspec(ctm shared) __mem40 uint32_t *data;
-        __declspec(ctm shared) __mem40 uint8_t *ip_proto;
         __declspec(local_mem shared) uint32_t ip_udp_src_hash;
 
         // NAT LTW table stuff
@@ -253,23 +248,16 @@ int main(void)
             in_port = MAC_TO_PORT(nbi_meta.port);
             pbuf = pkt_ctm_ptr40(pi->isl, pi->pnum, 0);
 
-            // maybe use ip/udp header structures instead of doing it on an offset basis
-            ip_src_addr = (__mem40 uint32_t *)(pbuf + pkt_off
-                                                    + sizeof(struct eth_hdr)
-                                                    + IP_HDR_SOURCE_OFF);
-            ip_dst_addr = (__mem40 uint32_t *)(pbuf + pkt_off
-                                                    + sizeof(struct eth_hdr)
-                                                    + IP_HDR_DESTINATION_OFF);
-            ip_proto = (__mem40 uint8_t *)(pbuf + pkt_off
-                                                + sizeof(struct eth_hdr)
-                                                + IP_HDR_PROTOCOL_OFF);
-            udp_src_port  = (__mem40 uint16_t *)(pbuf + pkt_off
+            ip_hdr = (__mem40 struct ip4_hdr *)(pbuf + pkt_off + sizeof(struct eth_hdr));
+
+            udp_hdr = (__mem40 struct udp_hdr *)(pbuf + pkt_off
                                                       + sizeof(struct eth_hdr)
                                                       + sizeof(struct ip4_hdr));
-            udp_dst_port  = (__mem40 uint16_t *)(pbuf + pkt_off
-                                                      + sizeof(struct eth_hdr)
-                                                      + sizeof(struct ip4_hdr)
-                                                      + UDP_HDR_DESTINATION_OFF);
+
+            l4_src_port  = (__mem40 uint16_t *)(&udp_hdr->sport);
+
+            l4_dst_port  = (__mem40 uint16_t *)(&udp_hdr->dport);
+
             data = (__mem40 uint32_t *)(pbuf + pkt_off
                                              + sizeof(struct eth_hdr)
                                              + sizeof(struct ip4_hdr)
@@ -284,19 +272,19 @@ int main(void)
                 // We start by checking if the flow is in the connection table
                 // or not. This is not very interesting since we basically allow
                 // all connections (should we be stopping them?)
-                five_tuple_hash = *ip_src_addr + *ip_dst_addr + *udp_src_port
-                                               + *udp_dst_port + *ip_proto;
+                five_tuple_hash = ip_hdr->src + ip_hdr->dst + *l4_src_port
+                                               + *l4_dst_port + ip_hdr->proto;
                 five_tuple_hash = hash_me_crc32(&five_tuple_hash, 4, HASH_SEED_VALUE);
 
                 for (i = 0; i < 4; i++) {
                     ct_lkup_key.word[i] = 0;
                 }
 
-                ct_lkup_key.src_ip = *ip_src_addr;
-                ct_lkup_key.dst_ip = *ip_dst_addr;
-                ct_lkup_key.src_dst_udp = *udp_src_port;
+                ct_lkup_key.src_ip = ip_hdr->src;
+                ct_lkup_key.dst_ip = ip_hdr->dst;
+                ct_lkup_key.src_dst_udp = *l4_src_port;
                 ct_lkup_key.src_dst_udp = ct_lkup_key.src_dst_udp << 16;
-                ct_lkup_key.src_dst_udp = ct_lkup_key.src_dst_udp | *udp_dst_port;
+                ct_lkup_key.src_dst_udp = ct_lkup_key.src_dst_udp | *l4_dst_port;
                 // We don't need to calculate this if we just store the entire
                 // five tuple in the CAM
                 ct_lkup_key.five_tuple_hash = five_tuple_hash;
@@ -333,8 +321,8 @@ int main(void)
 
                 // Now perform a lookup in the LAN to WAN table
                 ltw_lkup_key.word64 = 0;
-                ltw_lkup_key.ip_src = *ip_src_addr;
-                ltw_lkup_key.udp_src = *udp_src_port;
+                ltw_lkup_key.ip_src = ip_hdr->src;
+                ltw_lkup_key.udp_src = *l4_src_port;
 
                 // hash the word to randomize the bucket index
                 ip_udp_src_hash = hash_me_crc32(&ltw_lkup_key.word64, 8, HASH_SEED_VALUE);
@@ -360,17 +348,17 @@ int main(void)
                     wan_port = cur_wan_port++;
 
                     // Update the WAN to LAN mapping too
-                    nat_wtl_lkup_values[wan_port - WAN_PORT_START].dest_ip = *ip_src_addr;
-                    nat_wtl_lkup_values[wan_port - WAN_PORT_START].port = *udp_src_port;
+                    nat_wtl_lkup_values[wan_port - WAN_PORT_START].dest_ip = ip_hdr->src;
+                    nat_wtl_lkup_values[wan_port - WAN_PORT_START].port = *l4_src_port;
                     nat_wtl_lkup_values[wan_port - WAN_PORT_START].valid = 0x1;
                 }
 
                 // PACKET UPDATE OPERATIONS
                 // The source IP address gets swapped with the WAN's IP
-                *ip_src_addr = WAN_IP_HEX;
+                ip_hdr->src = WAN_IP_HEX;
                 // The source UDP port gets swapped with a WAN port which is fetched
                 // from the NAT table (it either existed or a new one was created)
-                *udp_src_port = wan_port;
+                *l4_src_port = wan_port;
             }
             else {
                 // Port 4 is the WAN interface
@@ -381,15 +369,15 @@ int main(void)
                 // NAT LOOKUP OPERATIONS
                 // For now, we assume that all the packets incoming on the WAN port
                 // are in the range [1024, 65535]
-                nat_wtl_lkup_idx = *udp_dst_port - WAN_PORT_START;
+                nat_wtl_lkup_idx = *l4_dst_port - WAN_PORT_START;
                 if (nat_wtl_lkup_values[nat_wtl_lkup_idx].valid) {
-                    *ip_dst_addr = nat_wtl_lkup_values[nat_wtl_lkup_idx].dest_ip;
-                    *udp_dst_port = nat_wtl_lkup_values[nat_wtl_lkup_idx].port;
+                    ip_hdr->dst = nat_wtl_lkup_values[nat_wtl_lkup_idx].dest_ip;
+                    *l4_dst_port = nat_wtl_lkup_values[nat_wtl_lkup_idx].port;
 
                     // After performing the translation, also verify if the flow is present
                     // in the connection table
-                    five_tuple_hash = *ip_src_addr + *ip_dst_addr + *udp_src_port
-                                                   + *udp_dst_port + *ip_proto;
+                    five_tuple_hash = ip_hdr->src + ip_hdr->dst + *l4_src_port
+                                                   + *l4_dst_port + ip_hdr->proto;
                     five_tuple_hash = hash_me_crc32(&five_tuple_hash, 4, HASH_SEED_VALUE);
 
                     for (i = 0; i < 4; i++) {
@@ -397,11 +385,11 @@ int main(void)
                     }
                     // Reverse the source and destination assignments
                     // Since the packet is inbound to the LAN interface now
-                    ct_lkup_key.src_ip = *ip_dst_addr;
-                    ct_lkup_key.dst_ip = *ip_src_addr;
-                    ct_lkup_key.src_dst_udp = *udp_dst_port;
+                    ct_lkup_key.src_ip = ip_hdr->dst;
+                    ct_lkup_key.dst_ip = ip_hdr->src;
+                    ct_lkup_key.src_dst_udp = *l4_dst_port;
                     ct_lkup_key.src_dst_udp = ct_lkup_key.src_dst_udp << 16;
-                    ct_lkup_key.src_dst_udp = ct_lkup_key.src_dst_udp | *udp_src_port;
+                    ct_lkup_key.src_dst_udp = ct_lkup_key.src_dst_udp | *l4_src_port;
                     ct_lkup_key.five_tuple_hash = five_tuple_hash;
 
                     // Perform a lookup in the connection table and see if it is there
