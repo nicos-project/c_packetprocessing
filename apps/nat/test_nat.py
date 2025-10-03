@@ -11,8 +11,8 @@ import threading
 import os
 from datetime import datetime
 
-num_ports_per_client = 63
-num_clients = 1024
+num_ports_per_client = 252
+num_clients = 256
 
 lan_iface = "enp94s0f0np0"
 lan_udp_src_port_start = 4096
@@ -44,10 +44,10 @@ def print_help():
 NAT Traffic Tester
 
 Usage:
-    python3 sender.py <packets_per_port>                  # Test both LAN to WAN and WAN to LAN
-    python3 sender.py ltw <packets_per_port>              # Test LAN to WAN only 
-    python3 sender.py wtl <packets_per_port>              # Test WAN to LAN only 
-    python3 sender.py -h | --help                         # Show this help message
+    python3 test_nat.py <packets_per_port>                  # Test both LAN to WAN and WAN to LAN
+    python3 test_nat.py ltw <packets_per_port>              # Test LAN to WAN only 
+    python3 test_nat.py wtl <packets_per_port>              # Test WAN to LAN only 
+    python3 test_nat.py -h | --help                         # Show this help message
 
 Arguments:
     ltw                 LAN to WAN traffic mode
@@ -55,9 +55,9 @@ Arguments:
     packets_per_port    Number of packets to send per port (required)
 
 Examples:
-    python3 sender.py 10           # Send 10 packets per port in both directions 
-    python3 sender.py ltw 25       # Send 25 packets per port from LAN to WAN
-    python3 sender.py wtl 5        # Send 5 packets per port from WAN to LAN
+    python3 test_nat.py 10           # Send 10 packets per port in both directions 
+    python3 test_nat.py ltw 25       # Send 25 packets per port from LAN to WAN
+    python3 test_nat.py wtl 5        # Send 5 packets per port from WAN to LAN
 """
     print(help_text)
 
@@ -75,12 +75,12 @@ def parse_arguments():
 
     try:
         if len(args) == 1:
-            # Format: python3 sender.py <packets>
+            # Format: python3 test_nat.py <packets>
             packets_per_port = int(args[0])
             mode = 'both'
 
         elif len(args) == 2:
-            # Format: python3 sender.py <mode> <packets>
+            # Format: python3 test_nat.py <mode> <packets>
             direction = args[0].lower()
             packets_per_port = int(args[1])
 
@@ -98,7 +98,7 @@ def parse_arguments():
             print("Error: packets_per_port must be a valid integer")
         else:
             print(f"Error: {e}")
-        print("\nUse 'python3 sender.py --help' for usage information")
+        print("\nUse 'python3 test_nat.py --help' for usage information")
         sys.exit(1)
 
     # Validate packet count
