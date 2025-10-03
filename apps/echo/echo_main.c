@@ -1,15 +1,7 @@
 #include <nfp.h>
-#include <stdint.h>
-#include <std/hash.h>
-#include <nfp/me.h>
-#include <nfp/mem_lkup.h>
-#include <nfp/mem_bulk.h>
 #include <nfp6000/nfp_me.h>
 #include <pkt/pkt.h>
-#include <std/reg_utils.h>
-#include <net/eth.h>
-#include <net/ip.h>
-#include <net/udp.h>
+#include <stdint.h>
 
 #include "config.h"
 
