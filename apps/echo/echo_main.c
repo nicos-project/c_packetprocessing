@@ -16,7 +16,7 @@
 int main(void)
 {
     // Just use one thread for now
-    // if (__ctx() == 0) {
+    if (__ctx() == 0) {
         __gpr struct pkt_ms_info msi;
         __gpr int in_port;
         __gpr uint8_t pkt_off = PKT_NBI_OFFSET + MAC_PREPEND_BYTES;
@@ -43,7 +43,7 @@ int main(void)
                          PORT_TO_TMQ(in_port), // same port as what we received it on
                          nbi_meta.seqr, nbi_meta.seq, PKT_CTM_SIZE_256);
         }
-    // }
+    }
 
     return 0;
 }
