@@ -55,17 +55,8 @@ case "$1" in
         nfp-nffw $2 load --no-start &> $OUTPUT || exit 1
         echo "done"
 
-
         echo -n " - Init DMA..."
         nfp init dma 0 ${CONFIG_DIR}/nfp_nbi8_dma_i32.json &> $OUTPUT || exit 1
-        echo "done"
-
-
-        echo -n " - Enable RX..."
-        #nfp -m mac -e set port rx 0 0 enable &> $OUTPUT || exit 1
-        #nfp -m mac -e set port rx 0 4 enable &> $OUTPUT || exit 1
-        nfp -m mac -e set port rx 0 0 enable
-        nfp -m mac -e set port rx 0 4 enable
         echo "done"
 
         echo -n " - Set EgressPrependEnable..."
@@ -76,6 +67,13 @@ case "$1" in
 
         echo -n " - Start ME's..."
         nfp-nffw start || exit 1
+        echo "done"
+
+        # In pikachu, we need to enable Rx each time after starting the MEs. This does not
+        # happen in sudowoodo. TODO: Test this part with the upgraded version of the toolchain
+        echo -n " - Enable RX..."
+        nfp -m mac -e set port rx 0 0 enable
+        nfp -m mac -e set port rx 0 4 enable
         echo "done"
 
         echo ""
