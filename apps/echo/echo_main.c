@@ -2,6 +2,9 @@
 #include <nfp6000/nfp_me.h>
 #include <pkt/pkt.h>
 #include <stdint.h>
+#include <net/eth.h>
+#include <net/ip.h>
+#include <net/udp.h>
 
 #include "config.h"
 
@@ -11,18 +14,31 @@ int main(void)
     if (__ctx() == 0) {
         __gpr struct pkt_ms_info msi;
         __gpr int in_port;
+        // __gpr uint16_t me_num = __MENUM;
+        // __gpr uint16_t t_num = __ctx();
+        // __gpr uint16_t isl_num = __ISLAND;
         __gpr uint8_t pkt_off = PKT_NBI_OFFSET + MAC_PREPEND_BYTES;
         __xread struct nbi_meta_catamaran nbi_meta;
         __xread struct nbi_meta_pkt_info *pi = &nbi_meta.pkt_info;
         __declspec(ctm shared) __mem40 char *pbuf;
+        // __declspec(ctm shared) __mem40 uint16_t *data;
 
         for (;;) {
             // Receive a packet
             pkt_nbi_recv(&nbi_meta, sizeof(nbi_meta));
             in_port = MAC_TO_PORT(nbi_meta.port);
             pbuf = pkt_ctm_ptr40(pi->isl, pi->pnum, 0);
+            // data = (__mem40 uint16_t *)(pbuf + pkt_off
+            //                                  + sizeof(struct eth_hdr)
+            //                                  + sizeof(struct ip4_hdr)
+            //                                  + sizeof(struct udp_hdr));
 
             // Do nothing
+            // *data = t_num;
+            // data += 1;
+            // *data = me_num;
+            // data += 1;
+            // *data = isl_num;
 
             // Send the packet back
             pkt_mac_egress_cmd_write(pbuf, pkt_off, 1, 1);
