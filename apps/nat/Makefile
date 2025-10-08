@@ -148,6 +148,41 @@ nat.fw: $(nat_LIST_FILES)
 	$(NFLD) $(nat_NFLDFLAGS) \
 	-elf $@ \
 	-u mei0.me0 -l $(NAT_LIST) \
+	-u mei0.me1 -l $(NAT_LIST) \
+	-u mei0.me2 -l $(NAT_LIST) \
+	-u mei0.me3 -l $(NAT_LIST) \
+	-u mei0.me4 -l $(NAT_LIST) \
+	-u mei0.me5 -l $(NAT_LIST) \
+	-u mei0.me6 -l $(NAT_LIST) \
+	-u mei0.me7 -l $(NAT_LIST) \
+	-u mei0.me8 -l $(NAT_LIST) \
+	-u mei0.me9 -l $(NAT_LIST) \
+	-u mei0.me10 -l $(NAT_LIST) \
+	-u mei0.me11 -l $(NAT_LIST) \
+	-u mei1.me0 -l $(NAT_LIST) \
+	-u mei1.me1 -l $(NAT_LIST) \
+	-u mei1.me2 -l $(NAT_LIST) \
+	-u mei1.me3 -l $(NAT_LIST) \
+	-u mei1.me4 -l $(NAT_LIST) \
+	-u mei1.me5 -l $(NAT_LIST) \
+	-u mei1.me6 -l $(NAT_LIST) \
+	-u mei1.me7 -l $(NAT_LIST) \
+	-u mei1.me8 -l $(NAT_LIST) \
+	-u mei1.me9 -l $(NAT_LIST) \
+	-u mei1.me10 -l $(NAT_LIST) \
+	-u mei1.me11 -l $(NAT_LIST) \
+	-u mei2.me0 -l $(NAT_LIST) \
+	-u mei2.me1 -l $(NAT_LIST) \
+	-u mei2.me2 -l $(NAT_LIST) \
+	-u mei2.me3 -l $(NAT_LIST) \
+	-u mei2.me4 -l $(NAT_LIST) \
+	-u mei2.me5 -l $(NAT_LIST) \
+	-u mei2.me6 -l $(NAT_LIST) \
+	-u mei2.me7 -l $(NAT_LIST) \
+	-u mei2.me8 -l $(NAT_LIST) \
+	-u mei2.me9 -l $(NAT_LIST) \
+	-u mei2.me10 -l $(NAT_LIST) \
+	-u mei2.me11 -l $(NAT_LIST) \
 	-u ila0.me0 -l $(ME_BLM_LIST) \
 	-i i8 -e $(PICO_CODE)
 

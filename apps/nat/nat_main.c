@@ -105,56 +105,92 @@ struct conn_table_lkup_key {
 };
 
 __declspec(imem export scope(global)) struct nat_wtl_lkup_value nat_wtl_lkup_values[WAN_PORT_POOL_SIZE];
+__declspec(emem export scope(global)) uint8_t ct_bucket_count[CONN_TABLE_NUM_BUCKETS];
+__declspec(emem export scope(global)) uint8_t ltw_bucket_count[NAT_LTW_TABLE_NUM_BUCKETS];
+__declspec(emem export scope(global) aligned(64)) int ct_sem = 1;
+__declspec(emem export scope(global) aligned(64)) int nat_sem = 1;
 
-__intrinsic void add_to_ltw_nat_table(__declspec(imem) struct mem_lkup_cam_r_48_64B_table_bucket_entry *table,
-                              __declspec(cls shared) uint8_t *bucket_count, uint32_t table_idx,
-                              uint64_t lkup_data, uint32_t result,
+void semaphore_down(volatile __declspec(mem addr40) void * addr)
+{
+    /* semaphore "DOWN" = claim = wait */
+    unsigned int addr_hi, addr_lo;
+    __declspec(read_write_reg) int xfer;
+    SIGNAL_PAIR my_signal_pair;
+
+    addr_hi = ((unsigned long long int)addr >> 8) & 0xff000000;
+    addr_lo = (unsigned long long int)addr & 0xffffffff;
+
+    do {
+        xfer = 1;
+        __asm {
+            mem[test_subsat, xfer, addr_hi, <<8, addr_lo, 1], \
+                sig_done[my_signal_pair];
+            ctx_arb[my_signal_pair]
+        }
+    } while (xfer == 0);
+}
+
+void semaphore_up(volatile __declspec(mem addr40) void * addr)
+{
+    /* semaphore "UP" = release = signal */
+    unsigned int addr_hi, addr_lo;
+    __declspec(read_write_reg) int xfer;
+
+    addr_hi = ((unsigned long long int)addr >> 8) & 0xff000000;
+    addr_lo = (unsigned long long int)addr & 0xffffffff;
+
+    __asm {
+        mem[incr, --, addr_hi, <<8, addr_lo, 1];
+    }
+}
+
+__intrinsic void add_to_ltw_nat_table(uint32_t table_idx, uint64_t lkup_data, uint32_t result,
                               __declspec(ctm shared) __mem40 uint32_t *data) {
-    if (bucket_count[table_idx] < NAT_LTW_TABLE_MAX_KEYS_PER_BUCKET) {
-        if (bucket_count[table_idx] == 0) {
+    if (ltw_bucket_count[table_idx] < NAT_LTW_TABLE_MAX_KEYS_PER_BUCKET) {
+        if (ltw_bucket_count[table_idx] == 0) {
             // key 0 and result 0 are in dataline1
-            table[table_idx].dataline1.lookup_key_lower0 = (lkup_data & 0xffff);
-            table[table_idx].dataline1.lookup_key_middle0 = ((lkup_data >> 16ull) & 0xffff);
-            table[table_idx].dataline1.lookup_key_upper0 = ((lkup_data >> 32ull) & 0xffff);
-            table[table_idx].dataline1.result0 = result;
+            nat_ltw_lkup_table[table_idx].dataline1.lookup_key_lower0 = (lkup_data & 0xffff);
+            nat_ltw_lkup_table[table_idx].dataline1.lookup_key_middle0 = ((lkup_data >> 16ull) & 0xffff);
+            nat_ltw_lkup_table[table_idx].dataline1.lookup_key_upper0 = ((lkup_data >> 32ull) & 0xffff);
+            nat_ltw_lkup_table[table_idx].dataline1.result0 = result;
         }
-        else if (bucket_count[table_idx] == 1) {
+        else if (ltw_bucket_count[table_idx] == 1) {
             // key 1 is in dataline1 and result 1 is in dataline4
-            table[table_idx].dataline1.lookup_key_lower1 = (lkup_data & 0xffff);
-            table[table_idx].dataline1.lookup_key_middle1 = ((lkup_data >> 16ull) & 0xffff);
-            table[table_idx].dataline1.lookup_key_upper1 = ((lkup_data >> 32ull) & 0xffff);
-            table[table_idx].dataline4.result1 = result;
+            nat_ltw_lkup_table[table_idx].dataline1.lookup_key_lower1 = (lkup_data & 0xffff);
+            nat_ltw_lkup_table[table_idx].dataline1.lookup_key_middle1 = ((lkup_data >> 16ull) & 0xffff);
+            nat_ltw_lkup_table[table_idx].dataline1.lookup_key_upper1 = ((lkup_data >> 32ull) & 0xffff);
+            nat_ltw_lkup_table[table_idx].dataline4.result1 = result;
         }
-        else if (bucket_count[table_idx] == 2) {
+        else if (ltw_bucket_count[table_idx] == 2) {
             // key 2 and result 2 are in dataline2
-            table[table_idx].dataline2.lookup_key_lower0 = (lkup_data & 0xffff);
-            table[table_idx].dataline2.lookup_key_middle0 = ((lkup_data >> 16ull) & 0xffff);
-            table[table_idx].dataline2.lookup_key_upper0 = ((lkup_data >> 32ull) & 0xffff);
-            table[table_idx].dataline2.result0 = result;
+            nat_ltw_lkup_table[table_idx].dataline2.lookup_key_lower0 = (lkup_data & 0xffff);
+            nat_ltw_lkup_table[table_idx].dataline2.lookup_key_middle0 = ((lkup_data >> 16ull) & 0xffff);
+            nat_ltw_lkup_table[table_idx].dataline2.lookup_key_upper0 = ((lkup_data >> 32ull) & 0xffff);
+            nat_ltw_lkup_table[table_idx].dataline2.result0 = result;
         }
-        else if (bucket_count[table_idx] == 3) {
+        else if (ltw_bucket_count[table_idx] == 3) {
             // key 3 is in dataline2 and result 3 is in dataline4
-            table[table_idx].dataline2.lookup_key_lower1 = (lkup_data & 0xffff);
-            table[table_idx].dataline2.lookup_key_middle1 = ((lkup_data >> 16ull) & 0xffff);
-            table[table_idx].dataline2.lookup_key_upper1 = ((lkup_data >> 32ull) & 0xffff);
-            table[table_idx].dataline4.result3_lower = (result & 0xffff);
-            table[table_idx].dataline4.result3_upper = ((result >> 16) & 0xffff);
+            nat_ltw_lkup_table[table_idx].dataline2.lookup_key_lower1 = (lkup_data & 0xffff);
+            nat_ltw_lkup_table[table_idx].dataline2.lookup_key_middle1 = ((lkup_data >> 16ull) & 0xffff);
+            nat_ltw_lkup_table[table_idx].dataline2.lookup_key_upper1 = ((lkup_data >> 32ull) & 0xffff);
+            nat_ltw_lkup_table[table_idx].dataline4.result3_lower = (result & 0xffff);
+            nat_ltw_lkup_table[table_idx].dataline4.result3_upper = ((result >> 16) & 0xffff);
         }
-        else if (bucket_count[table_idx] == 4) {
+        else if (ltw_bucket_count[table_idx] == 4) {
             // key 4 and result 4 are in dataline3
-            table[table_idx].dataline3.lookup_key_lower0 = (lkup_data & 0xffff);
-            table[table_idx].dataline3.lookup_key_middle0 = ((lkup_data >> 16ull) & 0xffff);
-            table[table_idx].dataline3.lookup_key_upper0 = ((lkup_data >> 32ull) & 0xffff);
-            table[table_idx].dataline3.result0 = result;
+            nat_ltw_lkup_table[table_idx].dataline3.lookup_key_lower0 = (lkup_data & 0xffff);
+            nat_ltw_lkup_table[table_idx].dataline3.lookup_key_middle0 = ((lkup_data >> 16ull) & 0xffff);
+            nat_ltw_lkup_table[table_idx].dataline3.lookup_key_upper0 = ((lkup_data >> 32ull) & 0xffff);
+            nat_ltw_lkup_table[table_idx].dataline3.result0 = result;
         }
-        else if (bucket_count[table_idx] == 5) {
+        else if (ltw_bucket_count[table_idx] == 5) {
             // key 5 is in dataline3 and result 3 is in dataline4
-            table[table_idx].dataline3.lookup_key_lower1 = (lkup_data & 0xffff);
-            table[table_idx].dataline3.lookup_key_middle1 = ((lkup_data >> 16ull) & 0xffff);
-            table[table_idx].dataline3.lookup_key_upper1 = ((lkup_data >> 32ull) & 0xffff);
-            table[table_idx].dataline4.result5 = result;
+            nat_ltw_lkup_table[table_idx].dataline3.lookup_key_lower1 = (lkup_data & 0xffff);
+            nat_ltw_lkup_table[table_idx].dataline3.lookup_key_middle1 = ((lkup_data >> 16ull) & 0xffff);
+            nat_ltw_lkup_table[table_idx].dataline3.lookup_key_upper1 = ((lkup_data >> 32ull) & 0xffff);
+            nat_ltw_lkup_table[table_idx].dataline4.result5 = result;
         }
-        bucket_count[table_idx]++;
+        ltw_bucket_count[table_idx]++;
     }
     else {
         // If the bucket is full, we would also start getting invalid ports
@@ -164,23 +200,22 @@ __intrinsic void add_to_ltw_nat_table(__declspec(imem) struct mem_lkup_cam_r_48_
     }
 }
 
-__intrinsic void add_to_conn_table(__declspec(emem) struct mem_lkup_cam128_64B_table_bucket_entry *table,
-                                   __declspec(cls shared) uint8_t *bucket_count, uint32_t table_idx,
-                                   __xwrite uint32_t *entry_data, uint32_t entry_size, __declspec(ctm shared) __mem40 uint32_t *pkt_data) {
-    if (bucket_count[table_idx] < CONN_TABLE_MAX_KEYS_PER_BUCKET) {
-        if (bucket_count[table_idx] == 0) {
+__intrinsic void add_to_conn_table(uint32_t table_idx, __xwrite uint32_t *entry_data,
+                                   uint32_t entry_size, __declspec(ctm shared) __mem40 uint32_t *pkt_data) {
+    if (ct_bucket_count[table_idx] < CONN_TABLE_MAX_KEYS_PER_BUCKET) {
+        if (ct_bucket_count[table_idx] == 0) {
             mem_write32(entry_data, (__mem40 void *) &(conn_table[table_idx].lookup_key0), entry_size);
         }
-        else if (bucket_count[table_idx] == 1) {
+        else if (ct_bucket_count[table_idx] == 1) {
             mem_write32(entry_data, (__mem40 void *) &(conn_table[table_idx].lookup_key1), entry_size);
         }
-        else if (bucket_count[table_idx] == 2) {
+        else if (ct_bucket_count[table_idx] == 2) {
             mem_write32(entry_data, (__mem40 void *) &(conn_table[table_idx].lookup_key2), entry_size);
         }
-        else if (bucket_count[table_idx] == 3) {
+        else if (ct_bucket_count[table_idx] == 3) {
             mem_write32(entry_data, (__mem40 void *) &(conn_table[table_idx].lookup_key3), entry_size);
         }
-        bucket_count[table_idx]++;
+        ct_bucket_count[table_idx]++;
     }
     else {
         // Send an explicit signal to the testing program
@@ -216,16 +251,12 @@ int main(void)
         __declspec(local_mem shared) unsigned long nat_ltw_lkup_key_shf;
         __declspec(local_mem shared) uint64_t nat_ltw_lkup_data; // this is what actually goes in the CAM (right-shifted result of ltw_lkup_key.word64 by nat_ltw_lkup_key_shf)
         __xrw uint32_t nat_ltw_lkup_key_result[2];
-        __declspec(cls shared) uint8_t ltw_bucket_count[NAT_LTW_TABLE_NUM_BUCKETS];
 
         // Connection table stuff
         __xwrite uint32_t conn_table_entry_data[4];
         __xrw uint32_t conn_table_lkup_data[4];
         __declspec(local_mem shared) unsigned int conn_table_lkup_key_shf;
         __declspec(local_mem shared) struct conn_table_lkup_key ct_lkup_key;
-        __declspec(cls shared) uint8_t ct_bucket_count[CONN_TABLE_NUM_BUCKETS];
-        __gpr uint32_t five_tuple_hash;
-
 
         for (i = 0; i < NAT_LTW_TABLE_NUM_BUCKETS; i++) {
             ltw_bucket_count[i] = 0;
@@ -272,10 +303,6 @@ int main(void)
                 // We start by checking if the flow is in the connection table
                 // or not. This is not very interesting since we basically allow
                 // all connections (should we be stopping them?)
-                five_tuple_hash = ip_hdr->src + ip_hdr->dst + *l4_src_port
-                                               + *l4_dst_port + ip_hdr->proto;
-                five_tuple_hash = hash_me_crc32(&five_tuple_hash, 4, HASH_SEED_VALUE);
-
                 for (i = 0; i < 4; i++) {
                     ct_lkup_key.word[i] = 0;
                 }
@@ -285,12 +312,10 @@ int main(void)
                 ct_lkup_key.src_dst_udp = *l4_src_port;
                 ct_lkup_key.src_dst_udp = ct_lkup_key.src_dst_udp << 16;
                 ct_lkup_key.src_dst_udp = ct_lkup_key.src_dst_udp | *l4_dst_port;
-                // We don't need to calculate this if we just store the entire
-                // five tuple in the CAM
-                ct_lkup_key.five_tuple_hash = five_tuple_hash;
-
                 // Perform a lookup in the connection table and see if it is there
                 reg_cp(conn_table_lkup_data, ct_lkup_key.word, sizeof(ct_lkup_key.word));
+
+                semaphore_down(&ct_sem);
                 mem_lkup_cam128_64B(conn_table_lkup_data, (__mem40 void *) conn_table,
                                     DATA_OFFSET, sizeof(conn_table_lkup_data),
                                     sizeof(conn_table));
@@ -300,7 +325,7 @@ int main(void)
                     // maybe it is worth adding a sanity check which verifies
                     // that if the flow is present in the connection table
                     // it should also be present in the LTW NAT table
-                    *data = 0x1;
+                    // *data = 0x1;
                 }
                 else {
                     // not found, insert it in the connection table
@@ -313,11 +338,14 @@ int main(void)
                                                 (ct_lkup_key.word[2] >> conn_table_lkup_key_shf));
                     conn_table_entry_data[3] = ct_lkup_key.word[3] >> conn_table_lkup_key_shf;
 
-                    add_to_conn_table(conn_table, ct_bucket_count, table_idx,
-                                      conn_table_entry_data, sizeof(conn_table_entry_data), data);
+                    add_to_conn_table(table_idx, conn_table_entry_data,
+                                      sizeof(conn_table_entry_data), data);
 
-                    *data = 0x2;
+                    // *data = 0x12345678;
+                    // data += 1;
+                    // *data = ct_bucket_count[table_idx];
                 }
+                semaphore_up(&ct_sem);
 
                 // Now perform a lookup in the LAN to WAN table
                 ltw_lkup_key.word64 = 0;
@@ -328,10 +356,11 @@ int main(void)
                 ip_udp_src_hash = hash_me_crc32(&ltw_lkup_key.word64, 8, HASH_SEED_VALUE);
 
                 ltw_lkup_key.word[1] = ip_udp_src_hash;
-
-                // NAT TABLE LOOKUP OPERATIONS
                 nat_ltw_lkup_key_result[0] = ltw_lkup_key.word[1];
                 nat_ltw_lkup_key_result[1] = ltw_lkup_key.word[0];
+
+                semaphore_down(&nat_sem);
+                // NAT TABLE LOOKUP OPERATIONS
                 mem_lkup_cam_r_48_64B(nat_ltw_lkup_key_result, (__mem40 void *) nat_ltw_lkup_table,
                                       DATA_OFFSET, sizeof(nat_ltw_lkup_key_result),
                                       sizeof(nat_ltw_lkup_table));
@@ -344,7 +373,7 @@ int main(void)
                     table_idx = ltw_lkup_key.word[1] & (MEM_LKUP_CAM_64B_NUM_ENTRIES(sizeof(nat_ltw_lkup_table)) - 1);
 
                     nat_ltw_lkup_data = ltw_lkup_key.word64 >> (uint64_t)nat_ltw_lkup_key_shf;
-                    add_to_ltw_nat_table(nat_ltw_lkup_table, ltw_bucket_count, table_idx, nat_ltw_lkup_data, cur_wan_port, data);
+                    add_to_ltw_nat_table(table_idx, nat_ltw_lkup_data, cur_wan_port, data);
                     wan_port = cur_wan_port++;
 
                     // Update the WAN to LAN mapping too
@@ -352,6 +381,7 @@ int main(void)
                     nat_wtl_lkup_values[wan_port - WAN_PORT_START].port = *l4_src_port;
                     nat_wtl_lkup_values[wan_port - WAN_PORT_START].valid = 0x1;
                 }
+                semaphore_up(&nat_sem);
 
                 // PACKET UPDATE OPERATIONS
                 // The source IP address gets swapped with the WAN's IP
@@ -376,10 +406,6 @@ int main(void)
 
                     // After performing the translation, also verify if the flow is present
                     // in the connection table
-                    five_tuple_hash = ip_hdr->src + ip_hdr->dst + *l4_src_port
-                                                   + *l4_dst_port + ip_hdr->proto;
-                    five_tuple_hash = hash_me_crc32(&five_tuple_hash, 4, HASH_SEED_VALUE);
-
                     for (i = 0; i < 4; i++) {
                         ct_lkup_key.word[i] = 0;
                     }
@@ -390,7 +416,6 @@ int main(void)
                     ct_lkup_key.src_dst_udp = *l4_dst_port;
                     ct_lkup_key.src_dst_udp = ct_lkup_key.src_dst_udp << 16;
                     ct_lkup_key.src_dst_udp = ct_lkup_key.src_dst_udp | *l4_src_port;
-                    ct_lkup_key.five_tuple_hash = five_tuple_hash;
 
                     // Perform a lookup in the connection table and see if it is there
                     reg_cp(conn_table_lkup_data, ct_lkup_key.word, sizeof(ct_lkup_key.word));
