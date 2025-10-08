@@ -31,18 +31,6 @@ __export NAT_LTW_TABLE_MEM __align(TABLE_SZ_64)                   \
                 nat_ltw_lkup_table[NAT_LTW_TABLE_NUM_BUCKETS];
 #define HASH_SEED_VALUE 0x12345678
 
-// Connection table
-// Each bucket holds 4 keys. This means that we can have
-// 65536 flows but we are limited by the size of the
-// WAN_PORT_POOL_SIZE which is ~64K ports (see below).
-#define CONN_TABLE_NUM_BUCKETS (1 << 14)
-#define CONN_TABLE_SZ    (CONN_TABLE_NUM_BUCKETS * 64)
-#define CONN_TABLE_MAX_KEYS_PER_BUCKET 4
-#define CONN_TABLE_MEM __emem
-__export CONN_TABLE_MEM __align(CONN_TABLE_SZ)              \
-          struct mem_lkup_cam128_64B_table_bucket_entry      \
-          conn_table[CONN_TABLE_NUM_BUCKETS];
-
 // Avoiding the well-known ports (0-1023)
 #define WAN_PORT_START 1024
 // This is 64512 and is the maximum number of connections we can
@@ -87,62 +75,8 @@ struct nat_wtl_lkup_value {
     };
 };
 
-// 128-bit lookup key for the connection table. We would ideally use the
-// 32-bit entry, 16 byte bucket CAM table but I haven't been able to make it work.
-// Using the 128-bit entry, 64 byte bucket CAM table for now
-struct conn_table_lkup_key {
-    union {
-        struct {
-            uint32_t src_ip;
-            uint32_t dst_ip;
-            uint32_t src_dst_udp;
-            uint32_t five_tuple_hash;
-        };
-        struct {
-            uint32_t word[4];
-        };
-    };
-};
-
 __declspec(imem export scope(global)) struct nat_wtl_lkup_value nat_wtl_lkup_values[WAN_PORT_POOL_SIZE];
-__declspec(emem export scope(global)) uint8_t ct_bucket_count[CONN_TABLE_NUM_BUCKETS];
-__declspec(emem export scope(global)) uint8_t ltw_bucket_count[NAT_LTW_TABLE_NUM_BUCKETS];
-__declspec(emem export scope(global) aligned(64)) int ct_sem = 1;
-__declspec(emem export scope(global) aligned(64)) int nat_sem = 1;
-
-void semaphore_down(volatile __declspec(mem addr40) void * addr)
-{
-    /* semaphore "DOWN" = claim = wait */
-    unsigned int addr_hi, addr_lo;
-    __declspec(read_write_reg) int xfer;
-    SIGNAL_PAIR my_signal_pair;
-
-    addr_hi = ((unsigned long long int)addr >> 8) & 0xff000000;
-    addr_lo = (unsigned long long int)addr & 0xffffffff;
-
-    do {
-        xfer = 1;
-        __asm {
-            mem[test_subsat, xfer, addr_hi, <<8, addr_lo, 1], \
-                sig_done[my_signal_pair];
-            ctx_arb[my_signal_pair]
-        }
-    } while (xfer == 0);
-}
-
-void semaphore_up(volatile __declspec(mem addr40) void * addr)
-{
-    /* semaphore "UP" = release = signal */
-    unsigned int addr_hi, addr_lo;
-    __declspec(read_write_reg) int xfer;
-
-    addr_hi = ((unsigned long long int)addr >> 8) & 0xff000000;
-    addr_lo = (unsigned long long int)addr & 0xffffffff;
-
-    __asm {
-        mem[incr, --, addr_hi, <<8, addr_lo, 1];
-    }
-}
+__declspec(cls export scope(island)) uint8_t ltw_bucket_count[NAT_LTW_TABLE_NUM_BUCKETS];
 
 __intrinsic void add_to_ltw_nat_table(uint32_t table_idx, uint64_t lkup_data, uint32_t result,
                               __declspec(ctm shared) __mem40 uint32_t *data) {
@@ -200,30 +134,6 @@ __intrinsic void add_to_ltw_nat_table(uint32_t table_idx, uint64_t lkup_data, ui
     }
 }
 
-__intrinsic void add_to_conn_table(uint32_t table_idx, __xwrite uint32_t *entry_data,
-                                   uint32_t entry_size, __declspec(ctm shared) __mem40 uint32_t *pkt_data) {
-    if (ct_bucket_count[table_idx] < CONN_TABLE_MAX_KEYS_PER_BUCKET) {
-        if (ct_bucket_count[table_idx] == 0) {
-            mem_write32(entry_data, (__mem40 void *) &(conn_table[table_idx].lookup_key0), entry_size);
-        }
-        else if (ct_bucket_count[table_idx] == 1) {
-            mem_write32(entry_data, (__mem40 void *) &(conn_table[table_idx].lookup_key1), entry_size);
-        }
-        else if (ct_bucket_count[table_idx] == 2) {
-            mem_write32(entry_data, (__mem40 void *) &(conn_table[table_idx].lookup_key2), entry_size);
-        }
-        else if (ct_bucket_count[table_idx] == 3) {
-            mem_write32(entry_data, (__mem40 void *) &(conn_table[table_idx].lookup_key3), entry_size);
-        }
-        ct_bucket_count[table_idx]++;
-    }
-    else {
-        // Send an explicit signal to the testing program
-        // that we ran out of buckets
-        *pkt_data = 0xffffffff;
-    }
-}
-
 int main(void)
 {
     // Just use one thread for now
@@ -252,18 +162,8 @@ int main(void)
         __declspec(local_mem shared) uint64_t nat_ltw_lkup_data; // this is what actually goes in the CAM (right-shifted result of ltw_lkup_key.word64 by nat_ltw_lkup_key_shf)
         __xrw uint32_t nat_ltw_lkup_key_result[2];
 
-        // Connection table stuff
-        __xwrite uint32_t conn_table_entry_data[4];
-        __xrw uint32_t conn_table_lkup_data[4];
-        __declspec(local_mem shared) unsigned int conn_table_lkup_key_shf;
-        __declspec(local_mem shared) struct conn_table_lkup_key ct_lkup_key;
-
         for (i = 0; i < NAT_LTW_TABLE_NUM_BUCKETS; i++) {
             ltw_bucket_count[i] = 0;
-        }
-
-        for (i = 0; i < CONN_TABLE_NUM_BUCKETS; i++) {
-            ct_bucket_count[i] = 0;
         }
 
         for (i = 0; i < WAN_PORT_POOL_SIZE; i++) {
@@ -271,7 +171,6 @@ int main(void)
         }
 
         nat_ltw_lkup_key_shf = MEM_LKUP_CAM_64B_KEY_OFFSET(DATA_OFFSET, sizeof(nat_ltw_lkup_table));
-        conn_table_lkup_key_shf = MEM_LKUP_CAM_64B_KEY_OFFSET(DATA_OFFSET, sizeof(conn_table));
 
         for (;;) {
             // Receive a packet
@@ -299,53 +198,6 @@ int main(void)
                 // Each incoming packet on this port will be rewritten as follows:
                 // 1. The source IP gets updated with the WAN IP
                 // 2. The source UDP port gets updated with a free WAN port
-                //
-                // We start by checking if the flow is in the connection table
-                // or not. This is not very interesting since we basically allow
-                // all connections (should we be stopping them?)
-                for (i = 0; i < 4; i++) {
-                    ct_lkup_key.word[i] = 0;
-                }
-
-                ct_lkup_key.src_ip = ip_hdr->src;
-                ct_lkup_key.dst_ip = ip_hdr->dst;
-                ct_lkup_key.src_dst_udp = *l4_src_port;
-                ct_lkup_key.src_dst_udp = ct_lkup_key.src_dst_udp << 16;
-                ct_lkup_key.src_dst_udp = ct_lkup_key.src_dst_udp | *l4_dst_port;
-                // Perform a lookup in the connection table and see if it is there
-                reg_cp(conn_table_lkup_data, ct_lkup_key.word, sizeof(ct_lkup_key.word));
-
-                semaphore_down(&ct_sem);
-                mem_lkup_cam128_64B(conn_table_lkup_data, (__mem40 void *) conn_table,
-                                    DATA_OFFSET, sizeof(conn_table_lkup_data),
-                                    sizeof(conn_table));
-
-                if (conn_table_lkup_data[0]) {
-                    // found
-                    // maybe it is worth adding a sanity check which verifies
-                    // that if the flow is present in the connection table
-                    // it should also be present in the LTW NAT table
-                    // *data = 0x1;
-                }
-                else {
-                    // not found, insert it in the connection table
-                    table_idx = MEM_LKUP_CAM_64B_BUCKET_IDX(ct_lkup_key.word, DATA_OFFSET, sizeof(conn_table));
-                    conn_table_entry_data[0] = ((ct_lkup_key.word[1] << (32 - conn_table_lkup_key_shf)) |
-                                                (ct_lkup_key.word[0] >> conn_table_lkup_key_shf));
-                    conn_table_entry_data[1] = ((ct_lkup_key.word[2] << (32 - conn_table_lkup_key_shf)) |
-                                                (ct_lkup_key.word[1] >> conn_table_lkup_key_shf));
-                    conn_table_entry_data[2] = ((ct_lkup_key.word[3] << (32 - conn_table_lkup_key_shf)) |
-                                                (ct_lkup_key.word[2] >> conn_table_lkup_key_shf));
-                    conn_table_entry_data[3] = ct_lkup_key.word[3] >> conn_table_lkup_key_shf;
-
-                    add_to_conn_table(table_idx, conn_table_entry_data,
-                                      sizeof(conn_table_entry_data), data);
-
-                    // *data = 0x12345678;
-                    // data += 1;
-                    // *data = ct_bucket_count[table_idx];
-                }
-                semaphore_up(&ct_sem);
 
                 // Now perform a lookup in the LAN to WAN table
                 ltw_lkup_key.word64 = 0;
@@ -359,7 +211,6 @@ int main(void)
                 nat_ltw_lkup_key_result[0] = ltw_lkup_key.word[1];
                 nat_ltw_lkup_key_result[1] = ltw_lkup_key.word[0];
 
-                semaphore_down(&nat_sem);
                 // NAT TABLE LOOKUP OPERATIONS
                 mem_lkup_cam_r_48_64B(nat_ltw_lkup_key_result, (__mem40 void *) nat_ltw_lkup_table,
                                       DATA_OFFSET, sizeof(nat_ltw_lkup_key_result),
@@ -381,7 +232,6 @@ int main(void)
                     nat_wtl_lkup_values[wan_port - WAN_PORT_START].port = *l4_src_port;
                     nat_wtl_lkup_values[wan_port - WAN_PORT_START].valid = 0x1;
                 }
-                semaphore_up(&nat_sem);
 
                 // PACKET UPDATE OPERATIONS
                 // The source IP address gets swapped with the WAN's IP
@@ -403,37 +253,6 @@ int main(void)
                 if (nat_wtl_lkup_values[nat_wtl_lkup_idx].valid) {
                     ip_hdr->dst = nat_wtl_lkup_values[nat_wtl_lkup_idx].dest_ip;
                     *l4_dst_port = nat_wtl_lkup_values[nat_wtl_lkup_idx].port;
-
-                    // After performing the translation, also verify if the flow is present
-                    // in the connection table
-                    for (i = 0; i < 4; i++) {
-                        ct_lkup_key.word[i] = 0;
-                    }
-                    // Reverse the source and destination assignments
-                    // Since the packet is inbound to the LAN interface now
-                    ct_lkup_key.src_ip = ip_hdr->dst;
-                    ct_lkup_key.dst_ip = ip_hdr->src;
-                    ct_lkup_key.src_dst_udp = *l4_dst_port;
-                    ct_lkup_key.src_dst_udp = ct_lkup_key.src_dst_udp << 16;
-                    ct_lkup_key.src_dst_udp = ct_lkup_key.src_dst_udp | *l4_src_port;
-
-                    // Perform a lookup in the connection table and see if it is there
-                    reg_cp(conn_table_lkup_data, ct_lkup_key.word, sizeof(ct_lkup_key.word));
-                    mem_lkup_cam128_64B(conn_table_lkup_data, (__mem40 void *) conn_table,
-                                        DATA_OFFSET, sizeof(conn_table_lkup_data),
-                                        sizeof(conn_table));
-
-                    if (conn_table_lkup_data[0]) {
-                        // found
-                        // maybe it is worth adding a sanity check which verifies
-                        // that if the flow is present in the connection table
-                        // it should also be present in the LTW NAT table
-                        *data = 0x1;
-                    }
-                    else {
-                        // we have a problem, someone is trying to intrude?
-                        *data = 0x2;
-                    }
                 }
                 else {
                     // we have a problem, send a signal to the testing script
