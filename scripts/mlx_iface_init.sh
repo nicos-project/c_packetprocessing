@@ -31,6 +31,10 @@ sudo ip link set dev "$IFACE" up
 echo "Disabling IPv6..."
 sudo sysctl -w "net.ipv6.conf.$IFACE.disable_ipv6=1"
 
+# Turn off multicast
+echo "Turning off multicast..."
+sudo ip link set "$IFACE" multicast off
+
 # Put it in promiscuous mode
 echo "Enabling promiscuous mode..."
 sudo ip link set dev "$IFACE" promisc on
