@@ -14,10 +14,10 @@ from datetime import datetime
 num_ports_per_client = 252
 num_clients = 256
 
-lan_iface = "enp94s0f0np0"
+lan_iface = "ens3f0np0"
 lan_udp_src_port_start = 4096
 
-wan_iface = "enp94s0f1np1"
+wan_iface = "ens3f1np1"
 wan_ip = "54.239.28.85"
 # Avoiding the well-known ports (0-1023)
 wan_udp_dst_port_start = 1024
