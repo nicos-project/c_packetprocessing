@@ -148,6 +148,17 @@ nat.fw: $(nat_LIST_FILES)
 	$(NFLD) $(nat_NFLDFLAGS) \
 	-elf $@ \
 	-u mei0.me0 -l $(NAT_LIST) \
+	-u mei0.me1 -l $(NAT_LIST) \
+	-u mei0.me2 -l $(NAT_LIST) \
+	-u mei0.me3 -l $(NAT_LIST) \
+	-u mei0.me4 -l $(NAT_LIST) \
+	-u mei0.me5 -l $(NAT_LIST) \
+	-u mei0.me6 -l $(NAT_LIST) \
+	-u mei0.me7 -l $(NAT_LIST) \
+	-u mei0.me8 -l $(NAT_LIST) \
+	-u mei0.me9 -l $(NAT_LIST) \
+	-u mei0.me10 -l $(NAT_LIST) \
+	-u mei0.me11 -l $(NAT_LIST) \
 	-u ila0.me0 -l $(ME_BLM_LIST) \
 	-i i8 -e $(PICO_CODE)
 

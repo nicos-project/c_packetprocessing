@@ -23,7 +23,7 @@
 // the WAN_PORT_POOL_SIZE which is ~64K ports (see below).
 #define NAT_LTW_TABLE_NUM_BUCKETS  (1 << 14)
 #define TABLE_SZ_64    (NAT_LTW_TABLE_NUM_BUCKETS * 64)
-#define NAT_LTW_TABLE_MEM __imem
+#define NAT_LTW_TABLE_MEM __emem
 #define DATA_OFFSET 0
 #define NAT_LTW_TABLE_MAX_KEYS_PER_BUCKET 6
 __export NAT_LTW_TABLE_MEM __align(TABLE_SZ_64)                   \
@@ -75,8 +75,43 @@ struct nat_wtl_lkup_value {
     };
 };
 
-__declspec(imem export scope(global)) struct nat_wtl_lkup_value nat_wtl_lkup_values[WAN_PORT_POOL_SIZE];
-__declspec(cls export scope(island)) uint8_t ltw_bucket_count[NAT_LTW_TABLE_NUM_BUCKETS];
+void semaphore_down(volatile __declspec(mem addr40) void * addr)
+{
+    /* semaphore "DOWN" = claim = wait */
+    unsigned int addr_hi, addr_lo;
+    __declspec(read_write_reg) int xfer;
+    SIGNAL_PAIR my_signal_pair;
+
+    addr_hi = ((unsigned long long int)addr >> 8) & 0xff000000;
+    addr_lo = (unsigned long long int)addr & 0xffffffff;
+
+    do {
+        xfer = 1;
+        __asm {
+            mem[test_subsat, xfer, addr_hi, <<8, addr_lo, 1], \
+                sig_done[my_signal_pair];
+            ctx_arb[my_signal_pair]
+        }
+    } while (xfer == 0);
+}
+
+void semaphore_up(volatile __declspec(mem addr40) void * addr)
+{
+    /* semaphore "UP" = release = signal */
+    unsigned int addr_hi, addr_lo;
+    __declspec(read_write_reg) int xfer;
+
+    addr_hi = ((unsigned long long int)addr >> 8) & 0xff000000;
+    addr_lo = (unsigned long long int)addr & 0xffffffff;
+
+    __asm {
+        mem[incr, --, addr_hi, <<8, addr_lo, 1];
+    }
+}
+
+__declspec(emem export scope(global)) struct nat_wtl_lkup_value nat_wtl_lkup_values[WAN_PORT_POOL_SIZE];
+__declspec(emem export scope(global)) uint8_t ltw_bucket_count[NAT_LTW_TABLE_NUM_BUCKETS];
+__declspec(emem export scope(global) aligned(64)) int nat_sem = 1;
 
 __intrinsic void add_to_ltw_nat_table(uint32_t table_idx, uint64_t lkup_data, uint32_t result,
                               __declspec(ctm shared) __mem40 uint32_t *data) {
@@ -211,6 +246,7 @@ int main(void)
                 nat_ltw_lkup_key_result[0] = ltw_lkup_key.word[1];
                 nat_ltw_lkup_key_result[1] = ltw_lkup_key.word[0];
 
+                semaphore_down(&nat_sem);
                 // NAT TABLE LOOKUP OPERATIONS
                 mem_lkup_cam_r_48_64B(nat_ltw_lkup_key_result, (__mem40 void *) nat_ltw_lkup_table,
                                       DATA_OFFSET, sizeof(nat_ltw_lkup_key_result),
@@ -232,6 +268,7 @@ int main(void)
                     nat_wtl_lkup_values[wan_port - WAN_PORT_START].port = *l4_src_port;
                     nat_wtl_lkup_values[wan_port - WAN_PORT_START].valid = 0x1;
                 }
+                semaphore_up(&nat_sem);
 
                 // PACKET UPDATE OPERATIONS
                 // The source IP address gets swapped with the WAN's IP
