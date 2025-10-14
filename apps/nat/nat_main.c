@@ -110,7 +110,7 @@ void semaphore_up(volatile __declspec(mem addr40) void * addr)
 }
 
 __declspec(emem export scope(global)) struct nat_wtl_lkup_value nat_wtl_lkup_values[WAN_PORT_POOL_SIZE];
-__declspec(emem export scope(global)) uint8_t ltw_bucket_count[NAT_LTW_TABLE_NUM_BUCKETS];
+__declspec(cls export scope(island)) uint8_t ltw_bucket_count[NAT_LTW_TABLE_NUM_BUCKETS];
 __declspec(emem export scope(global) aligned(64)) int nat_sem = 1;
 
 __intrinsic void add_to_ltw_nat_table(uint32_t table_idx, uint64_t lkup_data, uint32_t result,
