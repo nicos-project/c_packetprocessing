@@ -286,6 +286,12 @@ int main(void)
                 // NAT LOOKUP OPERATIONS
                 // For now, we assume that all the packets incoming on the WAN port
                 // are in the range [1024, 65535]
+                // TODO: Think if we really need a lock here. If we want to support
+                // simultaneous traffic on both ports (that's how a NAT would work
+                // in reality), we should put a lock. However, we currently test the NAT
+                // by sending traffic on either the LAN or the WAN port. Since the workload
+                // on the WAN port is read-only (it does not write to the table at all), we
+                // can get away without using a lock
                 nat_wtl_lkup_idx = *l4_dst_port - WAN_PORT_START;
                 if (nat_wtl_lkup_values[nat_wtl_lkup_idx].valid) {
                     ip_hdr->dst = nat_wtl_lkup_values[nat_wtl_lkup_idx].dest_ip;
