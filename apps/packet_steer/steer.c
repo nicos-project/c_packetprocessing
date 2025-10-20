@@ -5,7 +5,7 @@
 
 #include "config.h"
 #include "packet_defs.h"
-#include "dma.h"
+#include "pipeline.h"
 
 __export __shared __cls uint32_t count;
 

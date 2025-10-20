@@ -7,7 +7,7 @@
 #include <net/udp.h>
 
 #include "config.h"
-#include "dma.h"
+#include "pipeline.h"
 
 #define MAC_CHAN_PER_PORT   4
 #define TMQ_PER_PORT        (MAC_CHAN_PER_PORT * 8)
@@ -21,7 +21,7 @@ int main(void)
 {
     // Just use one thread for now
     if (__ctx() == 0) {
-        __gpr    struct work_t          work;
+        __gpr struct work_t work;
         __gpr struct pkt_ms_info msi;
         __gpr unsigned int type, island, pnum, plen, seqr, seq;
         __gpr unsigned int rnum, raddr_hi;
@@ -31,7 +31,6 @@ int main(void)
         __xread  struct work_t work_read;
         SIGNAL work_sig;
 
-        /* Select WorkQueue to poll based on FlowGroup */
         island = __ISLAND;
         work_count = 0;
 
