@@ -21,45 +21,33 @@ int main(void)
 {
     // Just use one thread for now
     if (__ctx() == 0) {
-        __xread  struct work_t          work_read;
         __gpr    struct work_t          work;
-        SIGNAL work_sig, result_sig;
         __gpr struct pkt_ms_info msi;
-
-        unsigned int type, island, pnum, plen, seqr, seq;
-        unsigned int rnum, raddr_hi;
+        __gpr unsigned int type, island, pnum, plen, seqr, seq;
+        __gpr unsigned int rnum, raddr_hi;
+        __gpr uint8_t pkt_off = PKT_NBI_OFFSET + MAC_PREPEND_BYTES;
         __mem40 char* pbuf;
         __declspec(ctm shared) __mem40 uint16_t *data;
-        __gpr uint8_t pkt_off = PKT_NBI_OFFSET + MAC_PREPEND_BYTES;
+        __xread  struct work_t work_read;
+        SIGNAL work_sig;
 
         /* Select WorkQueue to poll based on FlowGroup */
         island = __ISLAND;
         work_count = 0;
 
         if (island == 33) {
-          work_count = 100;
           rnum = MEM_RING_GET_NUM(flow_ring_0);
           raddr_hi = MEM_RING_GET_MEMADDR(flow_ring_0);
         }
 
-        __mem_workq_add_thread(rnum, raddr_hi,
-                        &work_read,
-                        sizeof(struct work_t), sizeof(struct work_t),
-                        sig_done, &work_sig);
-
-        // Dummy result signal to self
-        signal_ctx(ctx(), __signal_number(&result_sig));
-        __implicit_write(&result_sig);
-
         for (;;) {
-
-            __wait_for_all(&work_sig);
-            work = work_read;
             __mem_workq_add_thread(rnum, raddr_hi,
                             &work_read,
                             sizeof(struct work_t), sizeof(struct work_t),
                             sig_done, &work_sig);
+            __wait_for_all(&work_sig);
 
+            work = work_read;
             type = work.type;
             if (type == WORK_TYPE_RX) {
               island = 32 + work.io.isl;
@@ -67,17 +55,17 @@ int main(void)
               plen = work.io.plen;
               seqr = work.io.seqr;
               seq = work.io.seq;
-              work_count++;
-              // we might have to change the offset here
-              pbuf = pkt_ctm_ptr40(island, pnum, 0);
 
+              work_count++;
+
+              pbuf = pkt_ctm_ptr40(island, pnum, 0);
               data = (__mem40 uint16_t *)(pbuf + pkt_off
                                                + sizeof(struct eth_hdr)
                                                + sizeof(struct ip4_hdr)
                                                + sizeof(struct udp_hdr));
 
-              // Do nothing
               *data = 0x1234;
+
               // Send the packet back
               pkt_mac_egress_cmd_write(pbuf, pkt_off, 1, 1);
               msi = pkt_msd_write(pbuf, pkt_off - 4);
