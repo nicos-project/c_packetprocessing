@@ -1,6 +1,6 @@
 #!/bin/bash
 
-make clean && make && sudo ./init/load.sh restart echo.fw
+make clean && make && sudo ./init/load.sh restart steer.fw
 
 # Turn on the interfaces so that the link comes up
 # TODO: Is there a way to make this setting so that we don't have to
