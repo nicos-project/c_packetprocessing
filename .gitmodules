@@ -1,0 +1,3 @@
+[submodule "external/flowenv"]
+	path = external/flowenv
+	url = https://github.com/Netronome/flowenv.git
