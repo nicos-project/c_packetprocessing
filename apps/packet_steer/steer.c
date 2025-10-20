@@ -4,7 +4,6 @@
 #include <stdint.h>
 
 #include "config.h"
-#include "packet_defs.h"
 #include "pipeline.h"
 
 __export __shared __cls uint32_t count;
