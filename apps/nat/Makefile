@@ -23,9 +23,9 @@ app_src_dir     := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 ROOT_SRC_DIR  ?= $(realpath $(app_src_dir)/../..)
 base_dir        := $(ROOT_SRC_DIR)
 
-me_blocks_dir   := $(base_dir)/microc/blocks
-me_libs_dir     := $(base_dir)/microc/lib
-me_inc_dir      := $(base_dir)/microc/include
+me_blocks_dir   := $(base_dir)/external/flowenv/me/blocks
+me_libs_dir     := $(base_dir)/external/flowenv/me/lib
+me_inc_dir      := $(base_dir)/external/flowenv/me/include
 scripts_dir     := $(base_dir)/scripts
 
 include $(scripts_dir)/Makefile.nfp.config
