@@ -15,6 +15,9 @@
  * Flow Ring buffers
  */
 MEM_RING_INIT(flow_ring_0,  FLOW_GRP_WQ_SIZE);
+MEM_RING_INIT(flow_ring_1,  FLOW_GRP_WQ_SIZE);
+MEM_RING_INIT(flow_ring_2,  FLOW_GRP_WQ_SIZE);
+MEM_RING_INIT(flow_ring_3,  FLOW_GRP_WQ_SIZE);
 
 /**
  * Work types

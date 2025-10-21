@@ -15,8 +15,6 @@
 #define MAC_TO_PORT(x)      (x / MAC_CHAN_PER_PORT)
 #define PORT_TO_TMQ(x)      (x * TMQ_PER_PORT)
 
-__export __shared __cls uint32_t work_count;
-
 int main(void)
 {
     // Just use one thread for now
@@ -32,11 +30,22 @@ int main(void)
         SIGNAL work_sig;
 
         island = __ISLAND;
-        work_count = 0;
 
         if (island == 33) {
           rnum = MEM_RING_GET_NUM(flow_ring_0);
           raddr_hi = MEM_RING_GET_MEMADDR(flow_ring_0);
+        }
+        else if (island == 34) {
+          rnum = MEM_RING_GET_NUM(flow_ring_1);
+          raddr_hi = MEM_RING_GET_MEMADDR(flow_ring_1);
+        }
+        else if (island == 35) {
+          rnum = MEM_RING_GET_NUM(flow_ring_2);
+          raddr_hi = MEM_RING_GET_MEMADDR(flow_ring_2);
+        }
+        else if (island == 36) {
+          rnum = MEM_RING_GET_NUM(flow_ring_3);
+          raddr_hi = MEM_RING_GET_MEMADDR(flow_ring_3);
         }
 
         for (;;) {
@@ -55,15 +64,15 @@ int main(void)
               seqr = work.io.seqr;
               seq = work.io.seq;
 
-              work_count++;
-
               pbuf = pkt_ctm_ptr40(island, pnum, 0);
-              data = (__mem40 uint16_t *)(pbuf + pkt_off
+              /*data = (__mem40 uint16_t *)(pbuf + pkt_off
                                                + sizeof(struct eth_hdr)
                                                + sizeof(struct ip4_hdr)
                                                + sizeof(struct udp_hdr));
 
-              *data = 0x1234;
+              *data = __ISLAND;
+              data += 1;
+              *data = 0x1234;*/
 
               // Send the packet back
               pkt_mac_egress_cmd_write(pbuf, pkt_off, 1, 1);
