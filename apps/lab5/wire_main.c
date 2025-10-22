@@ -140,6 +140,9 @@ receive_packet( struct pkt_rxed *pkt_rxed,
     pnum     = pkt_rxed->nbi_meta.pkt_info.pnum;
     pkt_hdr  = pkt_ctm_ptr40(island, pnum, pkt_off);
 
+	
+	DEBUG(0xf, pkt_rxed->nbi_meta.port, 0, 0);
+
     mem_read32(&(pkt_rxed_in.pkt_hdr), pkt_hdr, sizeof(pkt_rxed_in.pkt_hdr));
     pkt_rxed->pkt_hdr = pkt_rxed_in.pkt_hdr;
 
@@ -208,7 +211,7 @@ send_packet( struct nbi_meta_catamaran *nbi_meta,
                  &msi,
                  plen + 4,
                  NBI,
-                 q_dst,
+                 152, //this is the argument for transmission queue. Transmission queues map to 'virtual ports' and physical ports. We see that TMQ 0 means packets are sent from phy0 and TMQ 152 means packets are sent from phy1
                  nbi_meta->seqr,
                  nbi_meta->seq,
                  PKT_CTM_SIZE_256);
@@ -246,7 +249,9 @@ main(void)
         stats_packet(&pkt_rxed, pkt_hdr);
 
         /* Send the packet */
+		DEBUG(0x3, 0, 0, 0);
         send_packet(&pkt_rxed.nbi_meta, pkt_hdr);
+		DEBUG(0x4, 0, 0, 0);
 
     }
 

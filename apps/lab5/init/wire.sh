@@ -65,7 +65,6 @@ case "$1" in
         #nfp -m mac -e set port rx 0 0 enable &> $OUTPUT || exit 1
         #nfp -m mac -e set port rx 0 4 enable &> $OUTPUT || exit 1
         nfp -m mac -e set port rx 0 0 enable
-        nfp -m mac -e set port rx 0 4 enable
         echo "done"
 
         echo -n " - Set EgressPrependEnable..."
@@ -78,6 +77,7 @@ case "$1" in
         nfp-nffw start || exit 1
         echo "done"
 
+        nfp -m mac -e set port rx 0 4 enable
         echo ""
         ;;
     reload|restart)
