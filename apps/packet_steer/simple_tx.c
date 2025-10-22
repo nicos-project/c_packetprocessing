@@ -56,35 +56,32 @@ int main(void)
             __wait_for_all(&work_sig);
 
             work = work_read;
-            type = work.type;
-            if (type == WORK_TYPE_RX) {
-              island = 32 + work.io.isl;
-              pnum   = work.io.pnum;
-              plen = work.io.plen;
-              seqr = work.io.seqr;
-              seq = work.io.seq;
+            island = work.isl;
+            pnum   = work.pnum;
+            plen = work.plen;
+            seqr = work.seqr;
+            seq = work.seq;
 
-              pbuf = pkt_ctm_ptr40(island, pnum, 0);
-              /*data = (__mem40 uint16_t *)(pbuf + pkt_off
-                                               + sizeof(struct eth_hdr)
-                                               + sizeof(struct ip4_hdr)
-                                               + sizeof(struct udp_hdr));
+            pbuf = pkt_ctm_ptr40(island, pnum, 0);
+            /*data = (__mem40 uint16_t *)(pbuf + pkt_off
+                                             + sizeof(struct eth_hdr)
+                                             + sizeof(struct ip4_hdr)
+                                             + sizeof(struct udp_hdr));
 
-              *data = __ISLAND;
-              data += 1;
-              *data = 0x1234;*/
+            *data = __ISLAND;
+            data += 1;
+            *data = 0x1234;*/
 
-              // Send the packet back
-              pkt_mac_egress_cmd_write(pbuf, pkt_off, 1, 1);
-              msi = pkt_msd_write(pbuf, pkt_off - 4);
-              pkt_nbi_send(island,
-                           pnum,
-                           &msi,
-                           plen - MAC_PREPEND_BYTES + 4,
-                           0, // NBI is 0
-                           PORT_TO_TMQ(0), // same port as what we received it on
-                           seqr, seq, PKT_CTM_SIZE_256);
-            }
+            // Send the packet back
+            pkt_mac_egress_cmd_write(pbuf, pkt_off, 1, 1);
+            msi = pkt_msd_write(pbuf, pkt_off - 4);
+            pkt_nbi_send(island,
+                         pnum,
+                         &msi,
+                         plen - MAC_PREPEND_BYTES + 4,
+                         0, // NBI is 0
+                         PORT_TO_TMQ(0), // same port as what we received it on
+                         seqr, seq, PKT_CTM_SIZE_256);
         }
     }
 

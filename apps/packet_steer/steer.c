@@ -62,16 +62,12 @@ int main() {
           flow_hash = hash_me_crc32(&flow_4_tuple.word64, 12, HASH_SEED_VALUE);
 
           // 3. Send to another island for processing
-          work.io.type    = WORK_TYPE_RX;
-          work.io.cbs     = 0;
-          work.io.isl     = pi->isl - 32;
-          work.io.pnum    = pi->pnum;
-          work.io.bls     = pi->bls;
-          work.io.muptr   = pi->muptr;
-          work.io.flow_id = 0;
-          work.io.plen    = pi->len;
-          work.io.seqr    = nbi_meta.seqr;
-          work.io.seq    = nbi_meta.seq;
+          work.isl     = pi->isl;
+          work.pnum    = pi->pnum;
+          work.plen    = pi->len;
+          work.seqr    = nbi_meta.seqr;
+          work.seq    = nbi_meta.seq;
+
           work_xfer = work;
 
           flow_island = flow_hash & 0x3;
