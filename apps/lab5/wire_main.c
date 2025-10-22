@@ -232,7 +232,9 @@ main(void)
     for (;;) {
         /* Receive a packet */
 
+	    DEBUG(0x1, 0, 0, 0);
         pkt_hdr = receive_packet(&pkt_rxed, sizeof(pkt_rxed));
+	    DEBUG(0x2, 0, 0, 0);
 
         /* Rewrite the packet */
         //rewrite_packet(&pkt_rxed, pkt_hdr);

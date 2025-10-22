@@ -38,12 +38,19 @@ include $(scripts_dir)/Makefile.templates
 #
 # Application definition starts here
 #
-$(eval $(call micro_c.compile_with_rtl,mem_list_obj,mem_list.c)) 
-$(eval $(call micro_c.add_fw_libs,mem_list_obj,nfp)) 
-$(eval $(call micro_c.add_std_libs,mem_list_obj,nfp_cluster_target intrinsic nfp_cluster_target_ring)) 
-$(eval $(call micro_c.add_flags,mem_list_obj,-Qnctx=8)) 
-$(eval $(call fw.add_obj,mem_list,mem_list_obj,i32.me0 i32.me1 i32.me2 i32.me3 i32.me4)) 
-$(eval $(call fw.link_with_rtsyms,mem_list))
+$(eval $(call micro_c.compile_with_rtl,i32_program_obj,i32.me0.c)) 
+$(eval $(call micro_c.add_fw_libs,i32_program_obj,nfp)) 
+$(eval $(call micro_c.add_std_libs,i32_program_obj,nfp_cluster_target intrinsic nfp_cluster_target_ring)) 
+$(eval $(call micro_c.add_flags,i32_program_obj,-Qnctx=1)) 
+
+$(eval $(call micro_c.compile_with_rtl,i33_program_obj,i33.me0.c)) 
+$(eval $(call micro_c.add_fw_libs,i33_program_obj,nfp)) 
+$(eval $(call micro_c.add_std_libs,i33_program_obj,nfp_cluster_target intrinsic nfp_cluster_target_ring)) 
+$(eval $(call micro_c.add_flags,i33_program_obj,-Qnctx=1)) 
+
+$(eval $(call fw.add_obj,signal,i32_program_obj,i32.me0)) 
+$(eval $(call fw.add_obj,signal,i33_program_obj,i33.me0)) 
+$(eval $(call fw.link_with_rtsyms,signal))
 #
 # Debug
 #

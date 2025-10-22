@@ -4,6 +4,22 @@ __shared __imem char imem_array[64];
 __shared __emem_n(0) char emem0_array[64];
 __shared __emem_n(1) char emem1_array[64];
 
+typedef __packed struct{
+    union{
+        struct{
+            uint32_t : 20;
+            uint32_t size_class  : 4;   
+            uint32_t resource_id : 8;
+            uint32_t offset;
+        };
+        uint64_t raw;
+    };
+} ptr40_t;
+
+__export __global __emem_n(0) __mem40 int *emem0_8b_sector_hdr;
+__export __global __emem_n(0) ptr40_t emem0_8b_sector_hdr1;
+__export __global __emem_n(0) uint64_t emem0_8b_sector_hdr2;
+
 
 void test_pointer_manipulation(__addr40 void **ptr_to_ptr){
     unsigned int extra_bits = ((unsigned long long)*ptr_to_ptr & 0xffffff0000000000) >> 32;

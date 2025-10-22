@@ -4,10 +4,28 @@
 #include <../../flowenv/me/lib/nfp/mem_ring.h>
 
 
+#include <nfp/mem_atomic.h>
+#include <nfp/mem_bulk.h>
+__volatile __export __emem uint32_t debug[8192];
+__volatile __export __emem uint32_t debug_idx;
+#define DEBUG(_a, _b, _c, _d) do { \
+    __xrw uint32_t _idx_val = 4; \
+    __xwrite uint32_t _dvals[4]; \
+    mem_test_add(&_idx_val, \
+            (__mem40 void *)&debug_idx, sizeof(_idx_val)); \
+    _dvals[0] = _a; \
+    _dvals[1] = _b; \
+    _dvals[2] = _c; \
+    _dvals[3] = _d; \
+    mem_write_atomic(_dvals, (__mem40 void *)\
+                    (debug + (_idx_val % (8192))), sizeof(_dvals)); \
+    } while(0)
+
 //ring 0
 __export __global __ctm_n(33) __addr40 __align(128 * sizeof(uint32_t)) uint32_t ctm_ring_head[128];
 __export __global __emem_n(1) __addr40 __align(128 * sizeof(uint32_t)) uint32_t test[128];
-MEM_RING_INIT_MU(ctm_ring, 2048, emem0)
+MEM_RING_INIT_MU(emem_ring, 2048, emem0)
+MEM_RING_INIT_MU(emem1_ring, 2048, emem1)
 
 void ctm_ring_empty(){
 	__xread uint32_t rxfer;
@@ -94,18 +112,24 @@ void ctm_ring_func_test(){
     }
 }
 
-void mem_ring_func_test(){
+void emem_ring_func_test(){
     SIGNAL sig;
-    __xrw uint32_t wxfer = 0xdeadbeef;
+    __xrw uint32_t wxfer = local_csr_read(local_csr_active_ctx_sts);
     __xread uint32_t rxfer;
     __gpr uint32_t val;
-    if (__ctx() == 0){
-		mem_ring_put(MEM_RING_GET_NUM(ctm_ring), MEM_RING_GET_MEMADDR(ctm_ring), &wxfer, 4);
-        wxfer = 0xc0debad0;
-		mem_ring_put(MEM_RING_GET_NUM(ctm_ring), MEM_RING_GET_MEMADDR(ctm_ring), &wxfer, 4);
+    if(__ctx() == 0 && wxfer == 0xc0000820){
+		mem_ring_put(MEM_RING_GET_NUM(emem_ring), MEM_RING_GET_MEMADDR(emem_ring), &wxfer, 4);
+		mem_ring_put(MEM_RING_GET_NUM(emem_ring), MEM_RING_GET_MEMADDR(emem_ring), &wxfer, 4);
+		mem_ring_put(MEM_RING_GET_NUM(emem_ring), MEM_RING_GET_MEMADDR(emem_ring), &wxfer, 4);
+		mem_ring_put(MEM_RING_GET_NUM(emem_ring), MEM_RING_GET_MEMADDR(emem_ring), &wxfer, 4);
+    }
+    else if(__ctx() == 0){
+		mem_ring_put(MEM_RING_GET_NUM(emem_ring), MEM_RING_GET_MEMADDR(emem_ring), &wxfer, 4);
+        //wxfer = 0xc0debad0;
+		mem_ring_put(MEM_RING_GET_NUM(emem_ring), MEM_RING_GET_MEMADDR(emem_ring), &wxfer, 4);
     }
 
-	val = mem_ring_get(MEM_RING_GET_NUM(ctm_ring), MEM_RING_GET_MEMADDR(ctm_ring), &rxfer, 4);
+	val = mem_ring_get(MEM_RING_GET_NUM(emem_ring), MEM_RING_GET_MEMADDR(emem_ring), &rxfer, 4);
     if(val == -1){
         __asm local_csr_wr[local_csr_mailbox0, 0xff];
     }
@@ -113,7 +137,7 @@ void mem_ring_func_test(){
         __asm local_csr_wr[local_csr_mailbox1, rxfer];
     }
 
-    val = mem_ring_get(MEM_RING_GET_NUM(ctm_ring), MEM_RING_GET_MEMADDR(ctm_ring), &rxfer, 4);
+    val = mem_ring_get(MEM_RING_GET_NUM(emem_ring), MEM_RING_GET_MEMADDR(emem_ring), &rxfer, 4);
     if(val == -1){
         __asm local_csr_wr[local_csr_mailbox3, 0xff];
     }
@@ -122,8 +146,75 @@ void mem_ring_func_test(){
     }
 }
 
+void emem1_ring_func_test(){
+    SIGNAL sig;
+    __xrw uint32_t wxfer = local_csr_read(local_csr_active_ctx_sts);
+    __xread uint32_t rxfer;
+    __gpr uint32_t val;
+    // if(__ctx() == 0 && wxfer == 0xc0000820){
+    //     mem_ring_put(MEM_RING_GET_NUM(emem1_ring), MEM_RING_GET_MEMADDR(emem1_ring), &wxfer, 4);
+    //     mem_ring_put(MEM_RING_GET_NUM(emem1_ring), MEM_RING_GET_MEMADDR(emem1_ring), &wxfer, 4);
+    //     mem_ring_put(MEM_RING_GET_NUM(emem1_ring), MEM_RING_GET_MEMADDR(emem1_ring), &wxfer, 4);
+    //     mem_ring_put(MEM_RING_GET_NUM(emem1_ring), MEM_RING_GET_MEMADDR(emem1_ring), &wxfer, 4);
+    // }
+    //else 
+    if(__ctx() == 0){
+        mem_ring_put(MEM_RING_GET_NUM(emem1_ring), MEM_RING_GET_MEMADDR(emem1_ring), &wxfer, 4);
+        //wxfer = 0xc0debad0;
+        mem_ring_put(MEM_RING_GET_NUM(emem1_ring), MEM_RING_GET_MEMADDR(emem1_ring), &wxfer, 4);
+    }
+
+    val = mem_ring_get(MEM_RING_GET_NUM(emem1_ring), MEM_RING_GET_MEMADDR(emem1_ring), &rxfer, 4);
+    if(val == -1){
+        __asm local_csr_wr[local_csr_mailbox0, 0xff];
+        __asm local_csr_wr[local_csr_mailbox1, rxfer];
+    }
+    else{
+        __asm local_csr_wr[local_csr_mailbox1, rxfer];
+    }
+
+    val = mem_ring_get(MEM_RING_GET_NUM(emem1_ring), MEM_RING_GET_MEMADDR(emem1_ring), &rxfer, 4);
+    if(val == -1){
+        __asm local_csr_wr[local_csr_mailbox3, 0xff];
+        __asm local_csr_wr[local_csr_mailbox1, rxfer];
+    }
+    else{
+        __asm local_csr_wr[local_csr_mailbox2, rxfer];
+    }
+}
+
+
+void parallel_producer_consumer_test(){
+    uint32_t ctx_status, MENumber, IslandID, ctx, i;
+    __xrw uint64_t val;
+    uint32_t val_high, val_low;
+
+    ctx_status = local_csr_read(local_csr_active_ctx_sts);
+    MENumber = ((ctx_status & 0x00000078) >> 3) - 4;
+    IslandID = ((ctx_status & 0x7e000000) >> 25);
+    ctx = __ctx();
+
+
+
+    if(IslandID == 32 && MENumber == 0 && ctx == 0){
+        for(i = 0; i < -1; i++){
+            val = i;
+            mem_ring_put(MEM_RING_GET_NUM(emem1_ring), MEM_RING_GET_MEMADDR(emem1_ring), &val, 8);
+        }
+    }
+    else{
+        while(1){
+            if(mem_ring_get(MEM_RING_GET_NUM(emem1_ring), MEM_RING_GET_MEMADDR(emem1_ring), &val, 8) != -1){
+                val_high = val >> 32;
+                val_low = (uint32_t) val;
+                DEBUG(0, 0, val_high, val_low);
+            }
+        }
+    }
+}
+
 int main(void)
-{
-	ctm_ring_full();
+{   
+	parallel_producer_consumer_test();
     return 0;
 }
