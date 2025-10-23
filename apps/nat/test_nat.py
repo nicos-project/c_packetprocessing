@@ -11,8 +11,8 @@ import threading
 import os
 from datetime import datetime
 
-num_ports_per_client = 1
-num_clients = 5
+num_ports_per_client = 252
+num_clients = 256
 
 lan_iface = "ens3f0np0"
 lan_udp_src_port_start = 4096
