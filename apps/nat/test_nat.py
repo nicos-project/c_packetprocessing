@@ -11,8 +11,8 @@ import threading
 import os
 from datetime import datetime
 
-num_ports_per_client = 252
-num_clients = 256
+num_ports_per_client = 1
+num_clients = 5
 
 lan_iface = "ens3f0np0"
 lan_udp_src_port_start = 4096
@@ -301,7 +301,7 @@ class PacketReceiver(threading.Thread):
                                     else:
                                         lan_to_wan_recv_stats[ltw_key] = 1
                                     if lan_to_wan_recv_stats[ltw_key] > self.packets_per_port:
-                                        raise Exception(f"Received invalid number of packets = {wtl_key}:{wan_to_lan_recv_stats[wtl_key]}")
+                                        raise Exception(f"Received invalid number of packets = {ltw_key}:{lan_to_wan_recv_stats[ltw_key]}")
                                 else:
                                     raise Exception(f"Received an invalid WAN IP = {ip_info['src_ip']}")
 
