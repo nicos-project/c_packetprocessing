@@ -26,6 +26,7 @@ __packed struct work_t
   uint32_t seq:16;
   uint32_t seqr:5;
   uint32_t plen:11;
-};
+  uint32_t hash:32;
+} __align(4);
 
 #endif /* PIPELINE_H_ */
