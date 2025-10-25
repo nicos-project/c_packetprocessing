@@ -46,7 +46,7 @@ $(eval $(call microcode.add_flags,blm_obj,-I$(microc_blocks_dir)/blm/_h))
 $(eval $(call microcode.add_flags,blm_obj,-I$(microc_blocks_dir)/blm/_uc))
 
 #
-# Preproc definition
+# Steer definition
 #
 $(eval $(call micro_c.compile_with_rtl,steer_obj,steer.c))
 $(eval $(call micro_c.add_fw_libs,steer_obj,nfp pkt std net))
@@ -54,12 +54,25 @@ $(eval $(call micro_c.add_flags,steer_obj,-I$(microc_blocks_dir)/blm))
 $(eval $(call micro_c.add_src_lib,steer_obj,libblm,$(microc_blocks_dir)/blm))
 $(eval $(call micro_c.force_include,steer_obj,config))
 
-# proc definition
-$(eval $(call micro_c.compile_with_rtl,simple_tx_obj,simple_tx.c))
-$(eval $(call micro_c.add_fw_libs,simple_tx_obj,nfp std pkt))
+#
+# Worker definition - select source file based on WORKER variable
+#
+# Default to nat if WORKER is not specified
+WORKER ?= nat
+
+ifeq ($(WORKER),echo)
+    WORKER_SRC := simple_tx.c
+else ifeq ($(WORKER),nat)
+    WORKER_SRC := nat.c
+else
+    $(error Invalid WORKER value: $(WORKER). Use 'echo' or 'nat')
+endif
+
+$(eval $(call micro_c.compile_with_rtl,worker_obj,$(WORKER_SRC)))
+$(eval $(call micro_c.add_fw_libs,worker_obj,nfp std pkt net))
 
 $(eval $(call fw.add_obj,steer,steer_obj,i32.me0 i32.me1 i32.me2 i32.me3 i32.me4 i32.me5 i32.me6 i32.me7 i32.me8 i32.me9 i32.me10 i32.me11))
-$(eval $(call fw.add_obj,steer,simple_tx_obj,i33.me0 i33.me1 i33.me2 i33.me3 i33.me4 i33.me5 i33.me6 i33.me7 i34.me0 i34.me1 i34.me2 i34.me3 i34.me4 i34.me5 i34.me6 i34.me7 i35.me0 i35.me1 i35.me2 i35.me3 i35.me4 i35.me5 i35.me6 i35.me7 i36.me0 i36.me1 i36.me2 i36.me3 i36.me4 i36.me5 i36.me6 i36.me7))
+$(eval $(call fw.add_obj,steer,worker_obj,i33.me0 i33.me1 i33.me2 i33.me3 i33.me4 i33.me5 i33.me6 i33.me7 i34.me0 i34.me1 i34.me2 i34.me3 i34.me4 i34.me5 i34.me6 i34.me7 i35.me0 i35.me1 i35.me2 i35.me3 i35.me4 i35.me5 i35.me6 i35.me7 i36.me0 i36.me1 i36.me2 i36.me3 i36.me4 i36.me5 i36.me6 i36.me7))
 $(eval $(call fw.add_obj,steer,blm_obj,i48.me0))
 $(eval $(call fw.link_with_rtsyms,steer))
 $(eval $(call fw.add_ppc,steer,i8,$(PICO_CODE)))
