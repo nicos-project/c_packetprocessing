@@ -203,7 +203,6 @@ int main(void)
         __declspec(ctm shared) __mem40 struct udp_hdr *udp_hdr;
         __declspec(ctm shared) __mem40 uint16_t *l4_src_port;
         __declspec(ctm shared) __mem40 uint16_t *l4_dst_port;
-        __declspec(ctm shared) __mem40 uint32_t *data;
 
         // NAT LTW table stuff
         __gpr uint32_t table_idx;
@@ -270,11 +269,6 @@ int main(void)
 
             l4_dst_port  = (__mem40 uint16_t *)(&udp_hdr->dport);
 
-            data = (__mem40 uint32_t *)(pbuf + pkt_off
-                                             + sizeof(struct eth_hdr)
-                                             + sizeof(struct ip4_hdr)
-                                             + sizeof(struct udp_hdr));
-
             // Now perform a lookup in the LAN to WAN table
             ltw_lkup_key.word64 = 0;
             ltw_lkup_key.ip_src = ip_hdr->src;
@@ -283,11 +277,6 @@ int main(void)
             ltw_lkup_key.word[1] = work.hash;
             nat_ltw_lkup_key_result[0] = ltw_lkup_key.word[1];
             nat_ltw_lkup_key_result[1] = ltw_lkup_key.word[0];
-
-            // *data = __ISLAND;
-            // data += 1;
-            // *data = ip_udp_src_hash;
-
 
             semaphore_down(&nat_sem);
             // NAT TABLE LOOKUP OPERATIONS
@@ -301,9 +290,6 @@ int main(void)
             }
             else {
                 table_idx = ltw_lkup_key.word[1] & (MEM_LKUP_CAM_64B_NUM_ENTRIES(sizeof(nat_ltw_lkup_table)) - 1);
-
-                // data += 1;
-                // *data = table_idx;
 
                 nat_ltw_lkup_data = ltw_lkup_key.word64 >> (uint64_t)nat_ltw_lkup_key_shf;
                 add_to_ltw_nat_table(table_idx, nat_ltw_lkup_data, cur_wan_port, data);
@@ -324,6 +310,12 @@ int main(void)
             // The source UDP port gets swapped with a WAN port which is fetched
             // from the NAT table (it either existed or a new one was created)
             *l4_src_port = wan_port;
+
+            // TODO: Add the WTL conversion too. I omitted it while copying the
+            // code from the non-steering NAT since we are always just testing one
+            // way LTW traffic with UDP packets and the the LTW is also the more
+            // expensive case for UDP packets since this is where the write happens
+            // to the CAM. The WTL case is read-only workload.
 
             // Send the packet back
             pkt_mac_egress_cmd_write(pbuf, pkt_off, 1, 1);
