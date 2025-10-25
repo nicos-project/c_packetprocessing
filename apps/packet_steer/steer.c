@@ -30,14 +30,16 @@ int main() {
   __gpr unsigned int rnum, raddr_hi;
   __gpr uint8_t pkt_off = PKT_NBI_OFFSET + MAC_PREPEND_BYTES;
   __gpr uint8_t flow_island = 0;
+  __gpr uint32_t flow_hash;
+  __gpr struct flow_four_tuple flow_4_tuple;
   __xwrite struct work_t work_xfer;
   __xread struct nbi_meta_catamaran nbi_meta;
   __xread struct nbi_meta_pkt_info *pi = &nbi_meta.pkt_info;
-  __declspec(local_mem shared) uint32_t flow_hash;
-  __declspec(local_mem shared) struct flow_four_tuple flow_4_tuple;
-  __declspec(ctm shared) __mem40 struct ip4_hdr *ip_hdr;
-  __declspec(ctm shared) __mem40 struct udp_hdr *udp_hdr;
-  __declspec(ctm shared) __mem40 char *pbuf;
+  __declspec(ctm) __mem40 struct ip4_hdr *ip_hdr;
+  __declspec(ctm) __mem40 struct udp_hdr *udp_hdr;
+  __declspec(ctm) __mem40 char *pbuf;
+  flow_4_tuple.word64[0]= 0;
+  flow_4_tuple.word64[1]= 0;
 
   for (;;) {
       // 1. Receive a packet
@@ -59,14 +61,17 @@ int main() {
       flow_hash = hash_me_crc32(&flow_4_tuple.word64, 12, HASH_SEED_VALUE);
 
       // 3. Send to another island for processing
-      work.isl     = pi->isl;
-      work.pnum    = pi->pnum;
-      work.plen    = pi->len;
-      work.seqr    = nbi_meta.seqr;
-      work.seq    = nbi_meta.seq;
+      work.isl = pi->isl;
+      work.pnum = pi->pnum;
+      work.plen = pi->len;
+      work.seqr = nbi_meta.seqr;
+      work.seq = nbi_meta.seq;
+      work.hash = flow_hash;
 
       work_xfer = work;
 
+      // There are 4 worker islands, we need 2 bits to check which island to
+      // steer this flow to
       flow_island = flow_hash & 0x3;
 
       if (flow_island == 0) {
