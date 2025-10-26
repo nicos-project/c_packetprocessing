@@ -203,6 +203,7 @@ int main(void)
         __declspec(ctm shared) __mem40 struct udp_hdr *udp_hdr;
         __declspec(ctm shared) __mem40 uint16_t *l4_src_port;
         __declspec(ctm shared) __mem40 uint16_t *l4_dst_port;
+        __declspec(ctm shared) __mem40 uint32_t *data;
 
         // NAT LTW table stuff
         __gpr uint32_t table_idx;
@@ -268,6 +269,11 @@ int main(void)
             l4_src_port  = (__mem40 uint16_t *)(&udp_hdr->sport);
 
             l4_dst_port  = (__mem40 uint16_t *)(&udp_hdr->dport);
+
+            data = (__mem40 uint32_t *)(pbuf + pkt_off
+                                             + sizeof(struct eth_hdr)
+                                             + sizeof(struct ip4_hdr)
+                                             + sizeof(struct udp_hdr));
 
             // Now perform a lookup in the LAN to WAN table
             ltw_lkup_key.word64 = 0;
