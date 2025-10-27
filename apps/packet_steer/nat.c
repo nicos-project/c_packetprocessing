@@ -188,7 +188,7 @@ int main(void)
         __xread  struct work_t work_read;
 
         // NAT stuff
-        __gpr int in_port;
+        __gpr uint32_t ip_src;
         __gpr int i;
         __gpr uint16_t wan_port = 0;
         __xread struct nbi_meta_catamaran nbi_meta;
@@ -271,53 +271,74 @@ int main(void)
                                              + sizeof(struct ip4_hdr)
                                              + sizeof(struct udp_hdr));
 
-            // Now perform a lookup in the LAN to WAN table
-            ltw_lkup_key.word64 = 0;
-            ltw_lkup_key.ip_src = ip_hdr->src;
-            ltw_lkup_key.udp_src = *l4_src_port;
+            // Need to check if this traffic is on the LAN port or the WAN port
+            // Assume for now that the LAN IPs are in range 192.168.1.0/24
+            // Alternatively, we could also check the destination IP and see if it matches the WAN IP
+            // to make this decision
+            ip_src = ip_hdr->src;
+            ip_src = ip_src >> 8; // TODO: it should be right shifted by 32 - prefix length
 
-            ltw_lkup_key.word[1] = work.hash;
-            nat_ltw_lkup_key_result[0] = ltw_lkup_key.word[1];
-            nat_ltw_lkup_key_result[1] = ltw_lkup_key.word[0];
+            // TODO: Move this if condition to the steering core and see how it affects performance
+            if (!(ip_src ^ 0x00C0A801)) {
+                // Now perform a lookup in the LAN to WAN table
+                ltw_lkup_key.word64 = 0;
+                ltw_lkup_key.ip_src = ip_hdr->src;
+                ltw_lkup_key.udp_src = *l4_src_port;
 
-            semaphore_down(&nat_sem);
-            // NAT TABLE LOOKUP OPERATIONS
-            mem_lkup_cam_r_48_64B(nat_ltw_lkup_key_result, (__mem40 void *) nat_ltw_lkup_table,
-                                  DATA_OFFSET, sizeof(nat_ltw_lkup_key_result),
-                                  sizeof(nat_ltw_lkup_table));
+                ltw_lkup_key.word[1] = work.hash;
+                nat_ltw_lkup_key_result[0] = ltw_lkup_key.word[1];
+                nat_ltw_lkup_key_result[1] = ltw_lkup_key.word[0];
 
-            if (nat_ltw_lkup_key_result[0]) {
-                // key was found in the CAM
-                wan_port = nat_ltw_lkup_key_result[0];
+                semaphore_down(&nat_sem);
+                // NAT TABLE LOOKUP OPERATIONS
+                mem_lkup_cam_r_48_64B(nat_ltw_lkup_key_result, (__mem40 void *) nat_ltw_lkup_table,
+                                      DATA_OFFSET, sizeof(nat_ltw_lkup_key_result),
+                                      sizeof(nat_ltw_lkup_table));
+
+                if (nat_ltw_lkup_key_result[0]) {
+                    // key was found in the CAM
+                    wan_port = nat_ltw_lkup_key_result[0];
+                }
+                else {
+                    table_idx = ltw_lkup_key.word[1] & (MEM_LKUP_CAM_64B_NUM_ENTRIES(sizeof(nat_ltw_lkup_table)) - 1);
+
+                    nat_ltw_lkup_data = ltw_lkup_key.word64 >> (uint64_t)nat_ltw_lkup_key_shf;
+                    add_to_ltw_nat_table(table_idx, nat_ltw_lkup_data, cur_wan_port, data);
+                    wan_port = cur_wan_port++;
+
+                    // Update the WAN to LAN mapping too
+                    // Each island operates on a different section of the nat_wtl_lkup_values
+                    // That is what having a per island lock is sufficient
+                    nat_wtl_lkup_values[wan_port - WAN_PORT_START].dest_ip = ip_hdr->src;
+                    nat_wtl_lkup_values[wan_port - WAN_PORT_START].port = *l4_src_port;
+                    nat_wtl_lkup_values[wan_port - WAN_PORT_START].valid = 0x1;
+                }
+                semaphore_up(&nat_sem);
+
+                // PACKET UPDATE OPERATIONS
+                // The source IP address gets swapped with the WAN's IP
+                ip_hdr->src = WAN_IP_HEX;
+                // The source UDP port gets swapped with a WAN port which is fetched
+                // from the NAT table (it either existed or a new one was created)
+                *l4_src_port = wan_port;
             }
             else {
-                table_idx = ltw_lkup_key.word[1] & (MEM_LKUP_CAM_64B_NUM_ENTRIES(sizeof(nat_ltw_lkup_table)) - 1);
-
-                nat_ltw_lkup_data = ltw_lkup_key.word64 >> (uint64_t)nat_ltw_lkup_key_shf;
-                add_to_ltw_nat_table(table_idx, nat_ltw_lkup_data, cur_wan_port, data);
-                wan_port = cur_wan_port++;
-
-                // Update the WAN to LAN mapping too
-                // Each island operates on a different section of the nat_wtl_lkup_values
-                // That is what having a per island lock is sufficient
-                nat_wtl_lkup_values[wan_port - WAN_PORT_START].dest_ip = ip_hdr->src;
-                nat_wtl_lkup_values[wan_port - WAN_PORT_START].port = *l4_src_port;
-                nat_wtl_lkup_values[wan_port - WAN_PORT_START].valid = 0x1;
+                // WAN to LAN traffic
+                // This case is read-only workload if we test the WAN to LAN traffic
+                // separately. This is how we currently test it. To test it simulataneously,
+                // we will need a lock here too.
+                nat_wtl_lkup_idx = *l4_dst_port - WAN_PORT_START;
+                if (nat_wtl_lkup_values[nat_wtl_lkup_idx].valid) {
+                    ip_hdr->dst = nat_wtl_lkup_values[nat_wtl_lkup_idx].dest_ip;
+                    *l4_dst_port = nat_wtl_lkup_values[nat_wtl_lkup_idx].port;
+                }
+                else {
+                    // we have a problem, send a signal to the testing script
+                    // that it should stop
+                    // *data = 0xffffffff;
+                }
             }
-            semaphore_up(&nat_sem);
 
-            // PACKET UPDATE OPERATIONS
-            // The source IP address gets swapped with the WAN's IP
-            ip_hdr->src = WAN_IP_HEX;
-            // The source UDP port gets swapped with a WAN port which is fetched
-            // from the NAT table (it either existed or a new one was created)
-            *l4_src_port = wan_port;
-
-            // TODO: Add the WTL conversion too. I omitted it while copying the
-            // code from the non-steering NAT since we are always just testing one
-            // way LTW traffic with UDP packets and the the LTW is also the more
-            // expensive case for UDP packets since this is where the write happens
-            // to the CAM. The WTL case is read-only workload.
 
             // Send the packet back
             pkt_mac_egress_cmd_write(pbuf, pkt_off, 1, 1);
