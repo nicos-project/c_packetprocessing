@@ -142,19 +142,38 @@ class PacketSender(threading.Thread):
     def send_wan_to_lan_traffic(self):
         print("Starting WAN to LAN traffic ======>")
         print("WAN to LAN sender stats (Destination IP address and UDP port):")
-        total_ports = num_ports_per_client * num_clients
-        for port_idx in range(0, total_ports):
-            src_ip = public_app_ip
-            src_port = public_app_port
-            dst_ip = wan_ip
-            dst_port = wan_udp_dst_port_start + port_idx
-            p = Ether() / IP(src = src_ip, dst = wan_ip) / UDP(sport = src_port, dport = dst_port) / Raw(b"\x00" * 18)
-            for i in range(0, self.num_packets_per_port):
-                if exit_sender:
-                    return
-                sendp(p, iface=wan_iface, verbose=0)
-            print(f"{wan_ip}:{dst_port} -> {self.num_packets_per_port}")
-            wan_to_lan_send_stats[f"{wan_ip}:{dst_port}"] = self.num_packets_per_port
+        if len(lan_to_wan_recv_stats) > 0:
+            # send what we received during LAN to WAN traffic
+            # this is useful in case we use a steering island to assign
+            # packets to different islands since each island would be sending
+            # from it's own WAN port start range
+            ports = [int(key.split(':')[1]) for key in lan_to_wan_recv_stats.keys()]
+            for port in ports:
+                src_ip = public_app_ip
+                src_port = public_app_port
+                dst_ip = wan_ip
+                dst_port = port
+                p = Ether() / IP(src = src_ip, dst = wan_ip) / UDP(sport = src_port, dport = dst_port) / Raw(b"\x00" * 18)
+                for i in range(0, self.num_packets_per_port):
+                    if exit_sender:
+                        return
+                    sendp(p, iface=wan_iface, verbose=0)
+                print(f"{wan_ip}:{dst_port} -> {self.num_packets_per_port}")
+                wan_to_lan_send_stats[f"{wan_ip}:{dst_port}"] = self.num_packets_per_port
+        else:
+            total_ports = num_ports_per_client * num_clients
+            for port_idx in range(0, total_ports):
+                src_ip = public_app_ip
+                src_port = public_app_port
+                dst_ip = wan_ip
+                dst_port = wan_udp_dst_port_start + port_idx
+                p = Ether() / IP(src = src_ip, dst = wan_ip) / UDP(sport = src_port, dport = dst_port) / Raw(b"\x00" * 18)
+                for i in range(0, self.num_packets_per_port):
+                    if exit_sender:
+                        return
+                    sendp(p, iface=wan_iface, verbose=0)
+                print(f"{wan_ip}:{dst_port} -> {self.num_packets_per_port}")
+                wan_to_lan_send_stats[f"{wan_ip}:{dst_port}"] = self.num_packets_per_port
 
     def run(self):
         """Start packet sending in a separate thread"""
@@ -390,22 +409,22 @@ def start_test(mode, num_packets):
         iface = lan_iface
         if mode == "wtl":
             iface = wan_iface
-        ltw_receiver = PacketReceiver(mode, num_packets, iface)
-        ltw_receiver.start()
+        receiver = PacketReceiver(mode, num_packets, iface)
+        receiver.start()
 
         # sleep for 2 seconds before starting the sender
         time.sleep(2)
-        ltw_sender = PacketSender(mode, num_packets, iface)
+        sender = PacketSender(mode, num_packets, iface)
 
         # this function starts the sender in a separate thread
-        ltw_sender.start()
-        ltw_sender.join()
+        sender.start()
+        sender.join()
 
-        ltw_receiver.stop_running()
-        ltw_receiver.join()
+        receiver.stop_running()
+        receiver.join()
         # the receiver also verifies that the test ran successfully
         # in case of ltw or wtl modes
-        ltw_receiver.cleanup()
+        receiver.cleanup()
 
     except KeyboardInterrupt:
         print("\nReceived interrupt signal...")
