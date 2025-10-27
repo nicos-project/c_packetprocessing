@@ -24,6 +24,7 @@ int main(void)
         __gpr unsigned int type, island, pnum, plen, seqr, seq;
         __gpr unsigned int rnum, raddr_hi;
         __gpr uint8_t pkt_off = PKT_NBI_OFFSET + MAC_PREPEND_BYTES;
+        __gpr uint8_t rx_port;
         __mem40 char* pbuf;
         __declspec(ctm shared) __mem40 uint16_t *data;
         __xread  struct work_t work_read;
@@ -61,6 +62,7 @@ int main(void)
             plen = work.plen;
             seqr = work.seqr;
             seq = work.seq;
+            rx_port = work.rx_port;
 
             pbuf = pkt_ctm_ptr40(island, pnum, 0);
             /*data = (__mem40 uint16_t *)(pbuf + pkt_off
@@ -80,7 +82,7 @@ int main(void)
                          &msi,
                          plen - MAC_PREPEND_BYTES + 4,
                          0, // NBI is 0
-                         PORT_TO_TMQ(0), // same port as what we received it on
+                         PORT_TO_TMQ(rx_port), // same port as what we received it on
                          seqr, seq, PKT_CTM_SIZE_256);
         }
     }

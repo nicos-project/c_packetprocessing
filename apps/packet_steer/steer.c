@@ -67,6 +67,7 @@ int main() {
       work.seqr = nbi_meta.seqr;
       work.seq = nbi_meta.seq;
       work.hash = flow_hash;
+      work.rx_port = MAC_TO_PORT(nbi_meta.port);
 
       work_xfer = work;
 

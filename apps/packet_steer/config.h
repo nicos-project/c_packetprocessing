@@ -21,6 +21,11 @@
 #define __APP_CONFIG_H__
 
 // #include "common.h"
+#define MAC_CHAN_PER_PORT   4
+#define TMQ_PER_PORT        (MAC_CHAN_PER_PORT * 8)
+
+#define MAC_TO_PORT(x)      (x / MAC_CHAN_PER_PORT)
+#define PORT_TO_TMQ(x)      (x * TMQ_PER_PORT)
 
 /* Each Packet Engine has 128 2-KB buffer credits, in the case that all of the
  * Dcache has been allocated to store packets, and 512 packet credits.
