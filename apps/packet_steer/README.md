@@ -12,4 +12,10 @@ To build the echo application and load it on to the NIC:
 `./build_and_load.sh`
 
 ## Testing
-You can use the `nat-test.py` script present in the testing folder in the root directory of this repo to run correctness checks on the NAT implementation. Ensure that both ports of the Netronome NIC are connected to the Mellanox NIC. The testing configuration uses a loopback setup where the Mellanox NIC sends UDP packets to Netronome LAN or WAN interface, the Netronome performs the NAT translation and mirrors packets back to the Mellanox NIC for verification. By default the testing script uses 1024 LAN clients and 63 ports for each client (64512 connections in total). You can run `sudo python3 nat-test.py 2` to run the test for 64512 connections for 2 packets in each direction (LAN to WAN and WAN to LAN).
+You can use the `nat-test.py` script to run correctness checks on the NAT implementation. By default the testing script uses 1024 LAN clients and 63 ports for each client (64512 connections in total). You can run `sudo python3 nat-test.py 2` to run the test for 64512 connections for 2 packets in each direction (LAN to WAN and WAN to LAN). With this implementation, you cannot test the WAN to LAN part individually since the WAN port assignment is not sequential.
+
+To test the echo server, you can use `echo-test.py` along with tcpdump to check the packets being echoed.
+
+You can also use `trex-test.py` to test the NAT and echo implementations with different packets sizes and flow counts.
+
+All testing scripts are present in the `testing` folder in the root directory of this repo.
