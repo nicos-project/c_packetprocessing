@@ -8,7 +8,7 @@
 #include <std/hash.h>
 
 #include "config.h"
-#include "pipeline.h"
+#include "steer.h"
 
 #define HASH_SEED_VALUE 0x12345678
 

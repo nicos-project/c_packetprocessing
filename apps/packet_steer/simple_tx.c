@@ -7,7 +7,7 @@
 #include <net/udp.h>
 
 #include "config.h"
-#include "pipeline.h"
+#include "steer.h"
 
 #define MAC_CHAN_PER_PORT   4
 #define TMQ_PER_PORT        (MAC_CHAN_PER_PORT * 8)

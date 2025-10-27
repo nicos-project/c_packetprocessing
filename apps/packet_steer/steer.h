@@ -1,8 +1,5 @@
-/* SPDX-License-Identifier: BSD 3-Clause License */
-/* Copyright (c) 2022, University of Washington, Max Planck Institute for Software Systems, and The University of Texas at Austin */
-
-#ifndef PIPELINE_H_
-#define PIPELINE_H_
+#ifndef __STEER_H_
+#define __STEER_H_
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -30,4 +27,4 @@ __packed struct work_t
   uint32_t rx_port:3;
 } __align(4);
 
-#endif /* PIPELINE_H_ */
+#endif /* __STEER_H_ */

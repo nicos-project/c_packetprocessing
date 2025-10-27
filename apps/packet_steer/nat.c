@@ -12,7 +12,7 @@
 #include <std/reg_utils.h>
 
 #include "config.h"
-#include "pipeline.h"
+#include "steer.h"
 
 #define WAN_IP_HEX 0x36EF1C55 // 54.239.28.85
 
