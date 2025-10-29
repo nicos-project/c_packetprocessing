@@ -64,8 +64,10 @@ ifeq ($(WORKER),echo)
     WORKER_SRC := echo.c
 else ifeq ($(WORKER),nat)
     WORKER_SRC := nat.c
+else ifeq ($(WORKER),firewall)
+    WORKER_SRC := firewall.c
 else
-    $(error Invalid WORKER value: $(WORKER). Use 'echo' or 'nat')
+    $(error Invalid WORKER value: $(WORKER). Use 'echo' or 'nat' or 'firewall')
 endif
 
 $(eval $(call micro_c.compile_with_rtl,worker_obj,$(WORKER_SRC)))

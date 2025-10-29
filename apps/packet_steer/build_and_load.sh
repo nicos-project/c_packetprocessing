@@ -4,9 +4,9 @@
 WORKER=${1:-echo}
 
 # Validate the worker type
-if [[ "$WORKER" != "echo" && "$WORKER" != "nat" ]]; then
+if [[ "$WORKER" != "echo" && "$WORKER" != "nat" && "$WORKER" != "firewall" ]]; then
     echo "Error: Invalid worker type '$WORKER'"
-    echo "Usage: $0 [echo|nat]"
+    echo "Usage: $0 [echo|nat|firewall]"
     exit 1
 fi
 
