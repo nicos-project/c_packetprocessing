@@ -57,11 +57,11 @@ $(eval $(call micro_c.force_include,steer_obj,config))
 #
 # Worker definition - select source file based on WORKER variable
 #
-# Default to nat if WORKER is not specified
-WORKER ?= nat
+# Default to echo if WORKER is not specified
+WORKER ?= echo
 
 ifeq ($(WORKER),echo)
-    WORKER_SRC := simple_tx.c
+    WORKER_SRC := echo.c
 else ifeq ($(WORKER),nat)
     WORKER_SRC := nat.c
 else
