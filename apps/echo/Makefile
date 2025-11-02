@@ -148,6 +148,29 @@ echo.fw: $(echo_LIST_FILES)
 	$(NFLD) $(echo_NFLDFLAGS) \
 	-elf $@ \
 	-u mei0.me0 -l $(echo_LIST) \
+	-u mei0.me1 -l $(echo_LIST) \
+	-u mei0.me2 -l $(echo_LIST) \
+	-u mei0.me3 -l $(echo_LIST) \
+	-u mei0.me4 -l $(echo_LIST) \
+	-u mei0.me5 -l $(echo_LIST) \
+	-u mei0.me6 -l $(echo_LIST) \
+	-u mei0.me7 -l $(echo_LIST) \
+	-u mei0.me8 -l $(echo_LIST) \
+	-u mei0.me9 -l $(echo_LIST) \
+	-u mei0.me10 -l $(echo_LIST) \
+	-u mei0.me11 -l $(echo_LIST) \
+	-u mei1.me0 -l $(echo_LIST) \
+	-u mei1.me1 -l $(echo_LIST) \
+	-u mei1.me2 -l $(echo_LIST) \
+	-u mei1.me3 -l $(echo_LIST) \
+	-u mei1.me4 -l $(echo_LIST) \
+	-u mei1.me5 -l $(echo_LIST) \
+	-u mei1.me6 -l $(echo_LIST) \
+	-u mei1.me7 -l $(echo_LIST) \
+	-u mei1.me8 -l $(echo_LIST) \
+	-u mei1.me9 -l $(echo_LIST) \
+	-u mei1.me10 -l $(echo_LIST) \
+	-u mei1.me11 -l $(echo_LIST) \
 	-u ila0.me0 -l $(ME_BLM_LIST) \
 	-i i8 -e $(PICO_CODE)
 
