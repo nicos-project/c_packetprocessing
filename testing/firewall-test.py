@@ -11,11 +11,11 @@ import threading
 import os
 from datetime import datetime
 
-num_ports_per_client = 252
-num_clients = 256
+num_ports_per_client = 65536
+num_clients = 1
 
 lan_iface = "ens3f0np0"
-lan_udp_src_port_start = 4096
+lan_udp_src_port_start = 0
 
 wan_iface = "ens3f0np0"
 
@@ -115,11 +115,11 @@ class PacketSender(threading.Thread):
         print("LAN to WAN sender stats (Source IP address and UDP port):")
         # Base IP: 192.168.1.1 as hex = 0xC0A80101
         # Avoiding the 192.168.0.x subnet since that is a valid subnet in pikachu
-        base_ip_hex = 0xC0A80100
+        base_ip_hex = 0xC0A80101
         for client_idx in range(0, num_clients):
             for port_idx in range(0, num_ports_per_client):
                 # Calculate new IP by adding client_idx to the base IP
-                new_ip_hex = base_ip_hex + client_idx
+                new_ip_hex = base_ip_hex
                 # Convert back to dotted decimal notation
                 src_ip = f"{(new_ip_hex >> 24) & 0xFF}.{(new_ip_hex >> 16) & 0xFF}.{(new_ip_hex >> 8) & 0xFF}.{new_ip_hex & 0xFF}"
                 src_port = lan_udp_src_port_start + port_idx
@@ -136,12 +136,12 @@ class PacketSender(threading.Thread):
     def send_wan_to_lan_traffic(self):
         print("Starting WAN to LAN traffic ======>")
         print("WAN to LAN sender stats (Destination IP address and UDP port):")
-        base_ip_hex = 0xC0A80100
+        base_ip_hex = 0xC0A80101
         for client_idx in range(0, num_clients):
             for port_idx in range(0, num_ports_per_client):
                 src_ip = public_app_ip
                 src_port = public_app_port
-                new_ip_hex = base_ip_hex + client_idx
+                new_ip_hex = base_ip_hex
                 # Convert back to dotted decimal notation
                 dst_ip = f"{(new_ip_hex >> 24) & 0xFF}.{(new_ip_hex >> 16) & 0xFF}.{(new_ip_hex >> 8) & 0xFF}.{new_ip_hex & 0xFF}"
                 dst_port = lan_udp_src_port_start + port_idx
@@ -293,12 +293,19 @@ class PacketReceiver(threading.Thread):
                                     lan_to_wan_recv_stats[ltw_key] += 1
                                 else:
                                     lan_to_wan_recv_stats[ltw_key] = 1
+                                    # The first packet of each flow creates an entry
+                                    # in the connection table. The firewall will add
+                                    # 0x12345678 in the mirrored packet.
+                                    if udp_info['payload'][0:4] != b'\x12\x34\x56\x78':
+                                        raise Exception("Key not added in the connection table")
                                 if lan_to_wan_recv_stats[ltw_key] > self.packets_per_port:
                                     raise Exception(f"Received invalid number of packets = {ltw_key}:{lan_to_wan_recv_stats[ltw_key]}")
 
                             if self.mode == "wtl":
                                 if udp_info['payload'][0:4] == b'\xff\xff\xff\xff':
                                     raise Exception("Flow table ran out of buckets! Aborting...")
+                                if udp_info['payload'][0:4] != b'\xab\xcd\xef\x12':
+                                    raise Exception("Key not added in the connection table")
 
                                 wtl_key = f"{ip_info['dest_ip']}:{udp_info['dest_port']}"
                                 if wtl_key in wan_to_lan_recv_stats:
