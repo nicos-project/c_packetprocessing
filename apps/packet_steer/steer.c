@@ -31,7 +31,9 @@ int main() {
   __gpr uint8_t pkt_off = PKT_NBI_OFFSET + MAC_PREPEND_BYTES;
   __gpr uint8_t flow_island = 0;
   __gpr uint32_t flow_hash;
+  __gpr uint32_t ip_src;
   __gpr struct flow_four_tuple flow_4_tuple;
+  __gpr uint32_t lan_or_wan;
   __xwrite struct work_t work_xfer;
   __xread struct nbi_meta_catamaran nbi_meta;
   __xread struct nbi_meta_pkt_info *pi = &nbi_meta.pkt_info;
@@ -51,12 +53,41 @@ int main() {
       udp_hdr = (__mem40 struct udp_hdr *)(pbuf + pkt_off
                                                 + sizeof(struct eth_hdr)
                                                 + sizeof(struct ip4_hdr));
-
       // 2. Calculate flow hash
-      flow_4_tuple.ip_src = ip_hdr->src;
-      flow_4_tuple.ip_dst = ip_hdr->dst;
-      flow_4_tuple.udp_src = udp_hdr->sport;
-      flow_4_tuple.udp_dst = udp_hdr->dport;
+      // First, we need to decide which direction the flow is in (LAN or WAN).
+      // For traffic that arrives on the WAN port, the hash will end up being
+      // different if we don't flip the src/dst. We need the same hash so that the flow
+      // goes to the same island irrespective of the direction.
+      //
+      // Assume for now that the LAN IPs are in range 192.168.1.0/24
+      // Alternatively, we could also check the destination IP and see if it matches
+      // the WAN IP to make this decision. But when we test the firewall, we don't
+      // have a WAN IP, we just have incoming or outgoing traffic.
+      //
+      // TODO: For NAT, we'll have to perform the translation before we calculate
+      // the hash so that we have the right island. We can use separate threads
+      // for doing the WAN to LAN translation instead of steering them to
+      // different islands.
+      //
+      ip_src = ip_hdr->src;
+      ip_src = ip_src >> 8; // TODO: it should be right shifted by 32 - prefix length
+
+      if (!(ip_src ^ 0x00C0A801)) {
+          // Traffic originating on the LAN port
+          flow_4_tuple.ip_src = ip_hdr->src;
+          flow_4_tuple.ip_dst = ip_hdr->dst;
+          flow_4_tuple.udp_src = udp_hdr->sport;
+          flow_4_tuple.udp_dst = udp_hdr->dport;
+          lan_or_wan = 0;
+      }
+      else {
+          // Traffic originating on the WAN port
+          flow_4_tuple.ip_src = ip_hdr->dst;
+          flow_4_tuple.ip_dst = ip_hdr->src;
+          flow_4_tuple.udp_src = udp_hdr->dport;
+          flow_4_tuple.udp_dst = udp_hdr->sport;
+          lan_or_wan = 1;
+      }
 
       flow_hash = hash_me_crc32(&flow_4_tuple.word64, 12, HASH_SEED_VALUE);
 
@@ -68,6 +99,7 @@ int main() {
       work.seq = nbi_meta.seq;
       work.hash = flow_hash;
       work.rx_port = MAC_TO_PORT(nbi_meta.port);
+      work.lan_or_wan = lan_or_wan;
 
       work_xfer = work;
 

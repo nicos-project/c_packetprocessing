@@ -129,7 +129,7 @@ int main(void)
         __xread  struct work_t work_read;
         SIGNAL work_sig;
 
-        __gpr uint32_t ip_src;
+        __gpr uint32_t lan_or_wan;
         __gpr int i;
         __declspec(ctm shared) __mem40 char *pbuf;
         __declspec(ctm shared) __mem40 struct ip4_hdr *ip_hdr;
@@ -183,6 +183,7 @@ int main(void)
             seqr = work.seqr;
             seq = work.seq;
             rx_port = work.rx_port;
+            lan_or_wan = work.lan_or_wan;
 
             pbuf = pkt_ctm_ptr40(island, pnum, 0);
 
@@ -201,15 +202,7 @@ int main(void)
                                              + sizeof(struct ip4_hdr)
                                              + sizeof(struct udp_hdr));
 
-            // Need to check if this traffic is on the LAN port or the WAN port
-            // Assume for now that the LAN IPs are in range 192.168.1.0/24
-            // Alternatively, we could also check the destination IP and see if it matches the WAN IP
-            // to make this decision
-            ip_src = ip_hdr->src;
-            ip_src = ip_src >> 8; // TODO: it should be right shifted by 32 - prefix length
-
-            // TODO: Move this if condition to the steering core and see how it affects performance
-            if (!(ip_src ^ 0x00C0A801)) {
+            if (lan_or_wan == 0) {
                 // We start by checking if the flow is in the connection table
                 // or not. We basically allow all connections on the LAN port
                 for (i = 0; i < 4; i++) {
