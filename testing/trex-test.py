@@ -4,6 +4,31 @@ import os
 import sys
 import time
 
+def create_udp_stream_with_var_sport(pkt_size, src_ip, dst_ip, base_sport, num_flows, dst_port=80):
+    """
+    Create a single stream that varies source port across num_flows.
+    This avoids creating separate streams for each flow.
+    """
+    crc_len = 4
+    pkt = Ether(src="00:15:4d:13:3b:34", dst="e8:eb:d3:f7:6c:26") / \
+          IP(src=src_ip, dst=dst_ip) / \
+          UDP(dport=dst_port, sport=base_sport)
+    num_data_bytes = pkt_size - len(pkt) - crc_len
+    pkt = pkt / Raw(b"\x00" * num_data_bytes)
+
+    # Field engine to vary source port
+    vm = STLScVmRaw([
+        STLVmFlowVar("src_port",
+                     min_value=base_sport,
+                     max_value=base_sport + num_flows - 1,
+                     size=2,
+                     op="inc"),
+        STLVmWrFlowVar(fv_name="src_port", pkt_offset="UDP.sport"),
+        STLVmFixChecksumHw(l3_offset="IP", l4_offset="UDP", l4_type=CTRexVmInsFixHwCs.L4_TYPE_UDP)
+    ])
+
+    return STLStream(packet=STLPktBuilder(pkt=pkt, vm=vm), mode=STLTXCont())
+
 def create_udp_stream(pkt_size, src_ip, dst_ip, src_port, dst_port):
     crc_len = 4
     pkt = Ether(src="00:15:4d:13:3b:34", dst="e8:eb:d3:f7:6c:26") / \
@@ -22,15 +47,16 @@ def start_stl_test(pkt_size, rate, num_flows, validate = True):
 
         c.reset(ports = [0, 1])
 
-        udp_streams = []
-        flow_idx = 0
+        udp_stream = create_udp_stream_with_var_sport(
+            pkt_size,
+            "192.168.1.1",
+            "12.11.10.9",
+            0,  # base source port
+            num_flows,
+            80     # destination port
+        )
 
-        for i in range(num_flows):
-            udp_stream = create_udp_stream(pkt_size, "192.168.1.1", "12.11.10.9", 49000 + flow_idx, 80)
-            udp_streams.append(udp_stream)
-            flow_idx += 1
-
-        c.add_streams(udp_streams, ports = [0])
+        c.add_streams([udp_stream], ports = [0])
 
         c.clear_stats()
 
@@ -125,13 +151,13 @@ def start_zero_loss_tpt_exp():
         with open(f"nat_zero_loss_tpt.csv", "a") as stats_file:
             stats_file.write(f"{pkt_size},{rate}\n")
 
-def start_tpt_exp():
+def start_tpt_exp(nw_func):
     pkt_sizes = [64, 128, 256, 512, 1024, 1518]
-    num_flows = [1, 2, 3, 4]
+    num_flows = [2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768]
     for flow_count in num_flows:
         for pkt_size in pkt_sizes:
             print(f"Testing with packet size: {pkt_size}")
-            exit_code = os.system('cd /home/kshitij/nic-os/c_packetprocessing/apps/packet_steer/ && ./build_and_load.sh nat')
+            exit_code = os.system(f'cd /home/kshitij/nic-os/c_packetprocessing/apps/packet_steer/ && ./build_and_load.sh {nw_func}')
             if exit_code != 0:
                 sys.exit(1)
             # Wait for the link to come up
@@ -141,14 +167,20 @@ def start_tpt_exp():
             stats = start_stl_test(pkt_size, rate, flow_count, False)
             port_0_stats = stats.get(0, {})
             rx_pps = port_0_stats.get("rx_pps", 0)
-            with open(f"nat_tpt.csv", "a") as stats_file:
+            with open(f"{nw_func}_tpt.csv", "a") as stats_file:
                 stats_file.write(f"{pkt_size},{flow_count},{rx_pps}\n")
 
 def main():
-    if len(sys.argv) != 1:
-        print("Usage: python3 trex-test.py")
+    if len(sys.argv) != 2:
+        print("Usage: python3 trex-test.py [nat|firewall]")
         sys.exit(1)
-    start_tpt_exp()
+
+    nw_func = sys.argv[1]
+    if nw_func != "nat" and nw_func != "firewall":
+        print("Usage: python3 trex-test.py [nat|firewall]")
+        sys.exit(1)
+
+    start_tpt_exp(nw_func)
 
 if __name__ == "__main__":
     main()
