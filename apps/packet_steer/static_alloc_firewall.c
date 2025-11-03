@@ -189,22 +189,21 @@ int main(void)
 
                 semaphore_down(&ct_sem);
                 present_in_conn_table = find_in_conn_table(hash_value, table_idx);
-                if (present_in_conn_table) {
-                    // found
-                    // we only do useful stuff on the WAN port side with this
-                    // *data = 0x2;
-                }
-                else {
+                if (!present_in_conn_table) {
                     // not found, insert it in the connection table
                     if (ct_bucket_count[table_idx] < CONN_TABLE_MAX_KEYS_PER_BUCKET) {
                         conn_table[table_idx].four_tuple_hash_entry[ct_bucket_count[table_idx]] = hash_value;
                         ct_bucket_count[table_idx]++;
+                        // Uncomment to test with firetest-test.py
+                        // *data = 0x12345678;
                     }
                     else {
                         // Send an explicit signal to the testing program
                         // that we ran out of keys in the bucket
                         *data = 0xffffffff;
                     }
+                }
+                else {
                 }
                 semaphore_up(&ct_sem);
             }
@@ -221,6 +220,8 @@ int main(void)
                     // we only do useful stuff on the WAN port side with this
                     // *data = hash_value;
                     // *data = 0x2;
+                    // Uncomment to test with firetest-test.py
+                    // *data = 0xabcdef12;
                 }
                 else {
                     // we have a problem, someone is trying to intrude?
