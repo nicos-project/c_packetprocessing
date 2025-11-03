@@ -29,22 +29,17 @@
 #define CONN_TABLE_MEM __emem
 #define DATA_OFFSET 0
 __export CONN_TABLE_MEM __align(CONN_TABLE_SZ)              \
-          struct mem_lkup_cam128_64B_table_bucket_entry      \
+          struct mem_lkup_cam32_16B_table_bucket_entry      \
           conn_table[CONN_TABLE_NUM_BUCKETS];
 
-// 128-bit lookup key for the connection table. We would ideally use the
-// 32-bit entry, 16 byte bucket CAM table but I haven't been able to make it work.
-// Using the 128-bit entry, 64 byte bucket CAM table for now
+// 32-bit entry, 16 byte bucket CAM table look up key
 struct conn_table_lkup_key {
     union {
         struct {
             uint32_t flow_hash;
-            uint32_t src_ip;
-            uint32_t dst_ip;
-            uint32_t src_dst_udp;
         };
         struct {
-            uint32_t word[4];
+            uint32_t word[2];
         };
     };
 };
@@ -91,30 +86,6 @@ void semaphore_up(volatile __declspec(mem addr40) void * addr)
 __declspec(emem export scope(island) aligned(64)) int ct_sem = 1;
 __declspec(emem export scope(global)) uint8_t ct_bucket_count[CONN_TABLE_NUM_BUCKETS];
 
-__intrinsic void add_to_conn_table(uint32_t table_idx, __xwrite uint32_t *entry_data,
-                                   uint32_t entry_size, __declspec(ctm shared) __mem40 uint32_t *pkt_data) {
-    if (ct_bucket_count[table_idx] < CONN_TABLE_MAX_KEYS_PER_BUCKET) {
-        if (ct_bucket_count[table_idx] == 0) {
-            mem_write32(entry_data, (__mem40 void *) &(conn_table[table_idx].lookup_key0), entry_size);
-        }
-        else if (ct_bucket_count[table_idx] == 1) {
-            mem_write32(entry_data, (__mem40 void *) &(conn_table[table_idx].lookup_key1), entry_size);
-        }
-        else if (ct_bucket_count[table_idx] == 2) {
-            mem_write32(entry_data, (__mem40 void *) &(conn_table[table_idx].lookup_key2), entry_size);
-        }
-        else if (ct_bucket_count[table_idx] == 3) {
-            mem_write32(entry_data, (__mem40 void *) &(conn_table[table_idx].lookup_key3), entry_size);
-        }
-        ct_bucket_count[table_idx]++;
-    }
-    else {
-        // Send an explicit signal to the testing program
-        // that we ran out of buckets
-        *pkt_data = 0xffffffff;
-    }
-}
-
 int main(void)
 {
     // Just use one thread for now
@@ -132,16 +103,12 @@ int main(void)
         __gpr uint32_t lan_or_wan;
         __gpr int i;
         __declspec(ctm shared) __mem40 char *pbuf;
-        __declspec(ctm shared) __mem40 struct ip4_hdr *ip_hdr;
-        __declspec(ctm shared) __mem40 struct udp_hdr *udp_hdr;
-        __declspec(ctm shared) __mem40 uint16_t *l4_src_port;
-        __declspec(ctm shared) __mem40 uint16_t *l4_dst_port;
         __declspec(ctm shared) __mem40 uint32_t *data;
 
         // Connection table stuff
         __gpr uint32_t table_idx;
-        __xwrite uint32_t conn_table_entry_data[4];
-        __xrw uint32_t conn_table_lkup_data[4];
+        __xwrite uint32_t conn_table_entry_data;
+        __xrw uint32_t conn_table_lkup_data[2];
         __declspec(local_mem shared) unsigned int conn_table_lkup_key_shf;
         __declspec(local_mem shared) struct conn_table_lkup_key ct_lkup_key;
 
@@ -167,7 +134,7 @@ int main(void)
             ct_bucket_count[i] = 0;
         }
 
-        conn_table_lkup_key_shf = MEM_LKUP_CAM_64B_KEY_OFFSET(DATA_OFFSET, sizeof(conn_table));
+        conn_table_lkup_key_shf = MEM_LKUP_CAM_16B_KEY_OFFSET(DATA_OFFSET, sizeof(conn_table));
 
         for (;;) {
             __mem_workq_add_thread(rnum, raddr_hi,
@@ -187,16 +154,6 @@ int main(void)
 
             pbuf = pkt_ctm_ptr40(island, pnum, 0);
 
-            ip_hdr = (__mem40 struct ip4_hdr *)(pbuf + pkt_off + sizeof(struct eth_hdr));
-
-            udp_hdr = (__mem40 struct udp_hdr *)(pbuf + pkt_off
-                                                      + sizeof(struct eth_hdr)
-                                                      + sizeof(struct ip4_hdr));
-
-            l4_src_port  = (__mem40 uint16_t *)(&udp_hdr->sport);
-
-            l4_dst_port  = (__mem40 uint16_t *)(&udp_hdr->dport);
-
             data = (__mem40 uint32_t *)(pbuf + pkt_off
                                              + sizeof(struct eth_hdr)
                                              + sizeof(struct ip4_hdr)
@@ -205,82 +162,76 @@ int main(void)
             if (lan_or_wan == 0) {
                 // We start by checking if the flow is in the connection table
                 // or not. We basically allow all connections on the LAN port
-                for (i = 0; i < 4; i++) {
+                for (i = 0; i < 2; i++) {
                     ct_lkup_key.word[i] = 0;
                 }
 
-                ct_lkup_key.src_ip = ip_hdr->src;
-                ct_lkup_key.dst_ip = ip_hdr->dst;
-                ct_lkup_key.src_dst_udp = *l4_src_port;
-                ct_lkup_key.src_dst_udp = ct_lkup_key.src_dst_udp << 16;
-                ct_lkup_key.src_dst_udp = ct_lkup_key.src_dst_udp | *l4_dst_port;
                 ct_lkup_key.flow_hash = work.hash;
 
                 // Perform a lookup in the connection table and see if it is there
                 reg_cp(conn_table_lkup_data, ct_lkup_key.word, sizeof(ct_lkup_key.word));
 
                 semaphore_down(&ct_sem);
-                mem_lkup_cam128_64B(conn_table_lkup_data, (__mem40 void *) conn_table,
+                mem_lkup_cam32_16B(conn_table_lkup_data, (__mem40 void *) conn_table,
                                     DATA_OFFSET, sizeof(conn_table_lkup_data),
                                     sizeof(conn_table));
 
-                if (conn_table_lkup_data[0]) {
-                    // found
-                    // maybe it is worth adding a sanity check which verifies
-                    // that if the flow is present in the connection table
-                    // it should also be present in the LTW NAT table
-                    // *data = 0x1;
-                }
-                else {
+                if (!conn_table_lkup_data[0]) {
                     // not found, insert it in the connection table
-                    table_idx = MEM_LKUP_CAM_64B_BUCKET_IDX(ct_lkup_key.word, DATA_OFFSET, sizeof(conn_table));
-                    conn_table_entry_data[0] = ((ct_lkup_key.word[1] << (32 - conn_table_lkup_key_shf)) |
+                    table_idx = MEM_LKUP_CAM_16B_BUCKET_IDX(ct_lkup_key.word, DATA_OFFSET, sizeof(conn_table));
+                    conn_table_entry_data = ((ct_lkup_key.word[1] << (32 - conn_table_lkup_key_shf)) |
                                                 (ct_lkup_key.word[0] >> conn_table_lkup_key_shf));
-                    conn_table_entry_data[1] = ((ct_lkup_key.word[2] << (32 - conn_table_lkup_key_shf)) |
-                                                (ct_lkup_key.word[1] >> conn_table_lkup_key_shf));
-                    conn_table_entry_data[2] = ((ct_lkup_key.word[3] << (32 - conn_table_lkup_key_shf)) |
-                                                (ct_lkup_key.word[2] >> conn_table_lkup_key_shf));
-                    conn_table_entry_data[3] = ct_lkup_key.word[3] >> conn_table_lkup_key_shf;
 
-                    add_to_conn_table(table_idx, conn_table_entry_data,
-                                      sizeof(conn_table_entry_data), data);
+                    if (ct_bucket_count[table_idx] < CONN_TABLE_MAX_KEYS_PER_BUCKET) {
+                        mem_write32(&conn_table_entry_data, (__mem40 void *) &(conn_table[table_idx].lookup_key0),
+                                    sizeof(conn_table_entry_data));
+                        ct_bucket_count[table_idx]++;
+
+                        // Uncomment to test with firetest-test.py
+                        // *data = 0x12345678;
+                    }
+                    else {
+                        *data = 0xffffffff;
+                    }
 
                     // *data = table_idx;
                     // data += 1;
-                    // *data = ct_lkup_key.flow_hash;
+                    // *data = conn_table_entry_data_key;
                     // data += 1;
                     // *data = ct_lkup_key.word[0];
+                }
+                else {
+                    // found
+                    // *data = 1;
                 }
                 semaphore_up(&ct_sem);
             }
             else {
                 // WAN port side. The connection should be present in the connection table or else
                 // we block it
-                for (i = 0; i < 4; i++) {
+                for (i = 0; i < 2; i++) {
                     ct_lkup_key.word[i] = 0;
                 }
                 // Reverse the source and destination assignments
                 // Since the packet is inbound to the LAN interface now
                 ct_lkup_key.flow_hash = work.hash;
-                ct_lkup_key.src_ip = ip_hdr->dst;
-                ct_lkup_key.dst_ip = ip_hdr->src;
-                ct_lkup_key.src_dst_udp = *l4_dst_port;
-                ct_lkup_key.src_dst_udp = ct_lkup_key.src_dst_udp << 16;
-                ct_lkup_key.src_dst_udp = ct_lkup_key.src_dst_udp | *l4_src_port;
 
                 // Perform a lookup in the connection table and see if it is there
                 reg_cp(conn_table_lkup_data, ct_lkup_key.word, sizeof(ct_lkup_key.word));
-                mem_lkup_cam128_64B(conn_table_lkup_data, (__mem40 void *) conn_table,
+                mem_lkup_cam32_16B(conn_table_lkup_data, (__mem40 void *) conn_table,
                                     DATA_OFFSET, sizeof(conn_table_lkup_data),
                                     sizeof(conn_table));
 
                 if (conn_table_lkup_data[0]) {
                     // *data = 0x1;
+                    // Uncomment to test with firetest-test.py
+                    // *data = 0xabcdef12;
                 }
                 else {
                     // we have a problem, someone is trying to intrude?
                     // drop the packet
                     // *data = 0x1;
+                    *data = 0xffffffff;
                 }
             }
 
