@@ -194,14 +194,15 @@ int main(void)
                     if (ct_bucket_count[table_idx] < CONN_TABLE_MAX_KEYS_PER_BUCKET) {
                         conn_table[table_idx].four_tuple_hash_entry[ct_bucket_count[table_idx]] = hash_value;
                         ct_bucket_count[table_idx]++;
-                        // Uncomment to test with firetest-test.py
+                        // Uncomment to test with firewall-test.py
                         // *data = 0x12345678;
                     }
-                    else {
+                    // else {
                         // Send an explicit signal to the testing program
                         // that we ran out of keys in the bucket
-                        *data = 0xffffffff;
-                    }
+                        // Uncomment to test with firewall-test.py
+                        // *data = 0xffffffff;
+                    // }
                 }
                 else {
                 }
@@ -220,16 +221,17 @@ int main(void)
                     // we only do useful stuff on the WAN port side with this
                     // *data = hash_value;
                     // *data = 0x2;
-                    // Uncomment to test with firetest-test.py
+                    // Uncomment to test with firewall-test.py
                     // *data = 0xabcdef12;
                 }
-                else {
+                // else {
                     // we have a problem, someone is trying to intrude?
                     // drop the packet
-                    *data = 0xffffffff;
+                    // Uncomment to test with firewall-test.py
+                    // *data = 0xffffffff;
                     // data += 1;
                     // *data = hash_value;
-                }
+                // }
             }
 
             // Send the packet back
