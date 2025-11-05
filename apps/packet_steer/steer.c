@@ -105,7 +105,7 @@ int main() {
 
       // There are 4 worker islands, we need 2 bits to check which island to
       // steer this flow to
-      flow_island = 0;
+      flow_island = flow_hash & 0x3;
 
       if (flow_island == 0) {
         rnum = MEM_RING_GET_NUM(flow_ring_0);
