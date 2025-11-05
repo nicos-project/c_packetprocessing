@@ -3,6 +3,7 @@ import scapy.all
 import os
 import sys
 import time
+import math
 
 def create_udp_stream_with_var_sport(pkt_size, src_ip, dst_ip, base_sport, num_flows, dst_port=80):
     """
@@ -60,7 +61,7 @@ def start_stl_test(pkt_size, rate, num_flows, validate = True):
 
         c.clear_stats()
 
-        c.start(ports = [0], mult = rate, duration = 10)
+        c.start(ports = [0], mult = rate, duration = 60)
 
         c.wait_on_traffic(ports = [0])
 
@@ -154,8 +155,11 @@ def start_zero_loss_tpt_exp():
 def start_tpt_exp(nw_func):
     pkt_sizes = [64, 128, 256, 512, 1024, 1518]
     num_flows = [2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768]
+    pkt_sizes = [64]
+    num_flows = [1]
     for flow_count in num_flows:
         for pkt_size in pkt_sizes:
+            # Start TRex server before this
             print(f"Testing with packet size: {pkt_size}")
             exit_code = os.system(f'cd /home/kshitij/nic-os/c_packetprocessing/apps/packet_steer/ && ./build_and_load.sh {nw_func}')
             if exit_code != 0:
@@ -166,9 +170,32 @@ def start_tpt_exp(nw_func):
             rate = convert_rate_to_trex_mult(max_load)
             stats = start_stl_test(pkt_size, rate, flow_count, False)
             port_0_stats = stats.get(0, {})
+            print(port_0_stats)
+            trex_tx_pps = port_0_stats.get("tx_pps", 0)
+            # We have observed that sometimes, TRex is unable to send
+            # packets at line rate. This has been observed with only min sized packets
+            # for now and the fix can either be to simply restart the test, restart
+            # the TRex server or reboot the machine completely. The root cause of
+            # the issue is unknown.
+            pkt_size_l1_bits = (pkt_size + 20) * 8 # 20 bytes ethernet L1 header + trailer
+            theoretical_pps_l1 = max_load / pkt_size_l1_bits
+            # To compare, I don't want to be super precise. Just want to make sure
+            # that the packet rate TRex sent at is the same as what we expect
+            # rounded down to the nearest integer in Mpps. For instance, the theoretical
+            # packet rate for min sized packets is 59.523 Mpps. We might get 59.1
+            # or 59.2 from TRex which is reasonably close for our purpose. So we just
+            # care that the two numbers round down to 59 Mpps
+            trex_tx_mpps = math.floor(trex_tx_pps / 1_000_000)
+            theoretical_tx_mpps = math.floor(theoretical_pps_l1 / 1_000_000)
+            if trex_tx_mpps < theoretical_tx_mpps:
+                print("Test failed because TRex couldn't reach line rate Tx")
+                sys.exit(1)
             rx_pps = port_0_stats.get("rx_pps", 0)
+            rx_gbps = (rx_pps * pkt_size_l1_bits) / 1_000_000_000
             with open(f"{nw_func}_tpt.csv", "a") as stats_file:
-                stats_file.write(f"{pkt_size},{flow_count},{rx_pps}\n")
+                stats_file.write(f"{pkt_size},{flow_count},{rx_gbps}\n")
+        # print("Restart TRex server. Waiting for 20 seconds")
+        # time.sleep(20)
 
 def main():
     if len(sys.argv) != 2:
@@ -176,7 +203,7 @@ def main():
         sys.exit(1)
 
     nw_func = sys.argv[1]
-    if nw_func != "nat" and nw_func != "firewall":
+    if nw_func != "nat" and nw_func != "firewall" and nw_func != "echo":
         print("Usage: python3 trex-test.py [nat|firewall]")
         sys.exit(1)
 
