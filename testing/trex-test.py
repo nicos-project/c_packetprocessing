@@ -161,7 +161,7 @@ def start_tpt_exp(nw_func):
         for pkt_size in pkt_sizes:
             # Start TRex server before this
             print(f"Testing with packet size: {pkt_size}")
-            exit_code = os.system(f'cd /home/kshitij/nic-os/c_packetprocessing/apps/packet_steer/ && ./build_and_load.sh {nw_func}')
+            exit_code = os.system(f'cd ~/nic-os/c_packetprocessing/apps/packet_steer/ && ./build_and_load.sh {nw_func}')
             if exit_code != 0:
                 sys.exit(1)
             # Wait for the link to come up
