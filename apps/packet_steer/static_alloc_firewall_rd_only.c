@@ -75,7 +75,7 @@ __declspec(emem export scope(global)) uint8_t ct_bucket_count[CONN_TABLE_NUM_BUC
 __intrinsic uint8_t find_in_conn_table(uint32_t hash_value, uint32_t table_idx) {
     __gpr uint32_t cur_idx = 0;
     __gpr uint8_t present_in_conn_table = 0;
-    while (cur_idx < 1) {
+    while (cur_idx < 4) {
         if (conn_table[table_idx].four_tuple_hash_entry[cur_idx] == hash_value) {
             present_in_conn_table = 1;
             break;
