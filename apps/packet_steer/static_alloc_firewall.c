@@ -75,7 +75,7 @@ __declspec(emem export scope(global)) uint8_t ct_bucket_count[CONN_TABLE_NUM_BUC
 __intrinsic uint8_t find_in_conn_table(uint32_t hash_value, uint32_t table_idx) {
     __gpr uint32_t cur_idx = 0;
     __gpr uint8_t present_in_conn_table = 0;
-    while (cur_idx < CONN_TABLE_MAX_KEYS_PER_BUCKET) {
+    while (cur_idx < 1) {
         if (conn_table[table_idx].four_tuple_hash_entry[cur_idx] == hash_value) {
             present_in_conn_table = 1;
             break;
@@ -187,9 +187,9 @@ int main(void)
                 hash_value = work.hash;
                 table_idx = hash_value & 0x3fff;
 
-                semaphore_down(&ct_sem);
+                // semaphore_down(&ct_sem);
                 present_in_conn_table = find_in_conn_table(hash_value, table_idx);
-                if (!present_in_conn_table) {
+                /*if (!present_in_conn_table) {
                     // not found, insert it in the connection table
                     if (ct_bucket_count[table_idx] < CONN_TABLE_MAX_KEYS_PER_BUCKET) {
                         conn_table[table_idx].four_tuple_hash_entry[ct_bucket_count[table_idx]] = hash_value;
@@ -205,8 +205,8 @@ int main(void)
                     // }
                 }
                 else {
-                }
-                semaphore_up(&ct_sem);
+                }*/
+                // semaphore_up(&ct_sem);
             }
             else {
                 // WAN port side. The connection should be present in the connection table or else
