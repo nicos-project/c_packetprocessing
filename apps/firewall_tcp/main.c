@@ -108,6 +108,8 @@ int main(void)
         __gpr uint32_t lan_or_wan;
         __gpr uint32_t hash_value;
         __gpr int i, j;
+        __gpr uint32_t ip_tmp;
+        __gpr uint16_t port_tmp;
         __declspec(ctm shared) __mem40 char *pbuf;
         __declspec(ctm shared) __mem40 struct ip4_hdr *ip_hdr;
         __declspec(ctm shared) __mem40 struct udp_hdr *udp_hdr;
@@ -233,6 +235,16 @@ int main(void)
                     // *data = hash_value;
                 // }
             }
+
+            // Swap IP addresses
+            ip_tmp = ip_hdr->src;
+            ip_hdr->src = ip_hdr->dst;
+            ip_hdr->dst = ip_tmp;
+
+            // Swap ports
+            port_tmp = *l4_src_port;
+            *l4_src_port = *l4_dst_port;
+            *l4_dst_port = port_tmp;
 
             // Send the packet back
             pkt_mac_egress_cmd_write(pbuf, pkt_off, 1, 1);
