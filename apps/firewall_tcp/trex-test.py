@@ -210,7 +210,7 @@ def start_tpt_exp(nw_func, num_runs):
                 # Start TRex server before this
                 proc = start_trex_server("/opt/trex/v3.06")
                 print(f"Testing with packet size: {pkt_size}")
-                exit_code = os.system(f'./build_and_load.sh {nw_func}')
+                exit_code = os.system(f'make load')
                 if exit_code != 0:
                     sys.exit(1)
                 # Wait for the link to come up
