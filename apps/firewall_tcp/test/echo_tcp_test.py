@@ -28,7 +28,7 @@ class PacketSender(threading.Thread):
 
     def send_packets(self):
         base_ip_hex = 0xC0A80101
-        count = 100
+        count = 10
         cur_count = 0
         num_flows = 1
         cur_flow = 0
@@ -40,7 +40,12 @@ class PacketSender(threading.Thread):
             src_port = 49000 + cur_flow
             dst_ip = "12.11.10.9"
             dst_port = 80
-            p = Ether() / IP(src = src_ip, dst = dst_ip) / TCP(sport = src_port, dport = dst_port, flags="PA") / Raw(b"\x00" * 18)
+            # First packet has SYN flag set to 1, rest have SYN flag set to 0
+            if cur_count == 0:
+                flags = "S"  # SYN flag = 1 for first packet
+            else:
+                flags = "A"  # ACK flag only, SYN = 0 for remaining packets
+            p = Ether() / IP(src = src_ip, dst = dst_ip) / TCP(sport = src_port, dport = dst_port, flags=flags) / Raw(b"\x00" * 18)
             sendp(p, iface=iface, verbose=0)
             cur_count += 1
             cur_flow = (cur_flow + 1) % num_flows

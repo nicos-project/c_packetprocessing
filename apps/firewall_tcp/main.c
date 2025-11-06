@@ -191,10 +191,11 @@ int main(void)
                 hash_value = work.hash;
                 table_idx = hash_value & 0x3fff;
 
-                semaphore_down(&ct_sem[table_idx]);
-                present_in_conn_table = find_in_conn_table(hash_value, table_idx);
-                if (!present_in_conn_table) {
-                    // not found, insert it in the connection table
+                // Check if this is a SYN packet
+                // Debug: try different flag checks
+                if (tcp_hdr->flags & 0x02) {  // SYN should be bit 1
+                    // SYN packet: acquire lock and write directly
+                    semaphore_down(&ct_sem[table_idx]);
                     if (ct_bucket_count[table_idx] < CONN_TABLE_MAX_KEYS_PER_BUCKET) {
                         conn_table[table_idx].four_tuple_hash_entry[ct_bucket_count[table_idx]] = hash_value;
                         ct_bucket_count[table_idx]++;
@@ -207,10 +208,18 @@ int main(void)
                         // Uncomment to test with firewall-test.py
                         // *data = 0xffffffff;
                     // }
+                    semaphore_up(&ct_sem[table_idx]);
+
+                    // Mark write operation: set dport to 10000
+                    *l4_dst_port = 30000;
                 }
                 else {
+                    // Non-SYN packet: only read, no lock needed
+                    present_in_conn_table = find_in_conn_table(hash_value, table_idx);
+
+                    // Mark read operation: set dport to 20000
+                    *l4_dst_port = 20000;
                 }
-                semaphore_up(&ct_sem[table_idx]);
             }
             else {
                 // WAN port side. The connection should be present in the connection table or else
