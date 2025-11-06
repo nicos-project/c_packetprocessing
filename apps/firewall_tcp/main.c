@@ -15,7 +15,7 @@
 #include <std/reg_utils.h>
 #include <net/eth.h>
 #include <net/ip.h>
-#include <net/udp.h>
+#include <net/tcp.h>
 
 #include "config.h"
 #include "steer.h"
@@ -112,7 +112,7 @@ int main(void)
         __gpr uint16_t port_tmp;
         __declspec(ctm shared) __mem40 char *pbuf;
         __declspec(ctm shared) __mem40 struct ip4_hdr *ip_hdr;
-        __declspec(ctm shared) __mem40 struct udp_hdr *udp_hdr;
+        __declspec(ctm shared) __mem40 struct tcp_hdr *tcp_hdr;
         __declspec(ctm shared) __mem40 uint16_t *l4_src_port;
         __declspec(ctm shared) __mem40 uint16_t *l4_dst_port;
         __declspec(ctm shared) __mem40 uint32_t *data;
@@ -167,18 +167,18 @@ int main(void)
 
             ip_hdr = (__mem40 struct ip4_hdr *)(pbuf + pkt_off + sizeof(struct eth_hdr));
 
-            udp_hdr = (__mem40 struct udp_hdr *)(pbuf + pkt_off
+            tcp_hdr = (__mem40 struct tcp_hdr *)(pbuf + pkt_off
                                                       + sizeof(struct eth_hdr)
                                                       + sizeof(struct ip4_hdr));
 
-            l4_src_port  = (__mem40 uint16_t *)(&udp_hdr->sport);
+            l4_src_port  = (__mem40 uint16_t *)(&tcp_hdr->sport);
 
-            l4_dst_port  = (__mem40 uint16_t *)(&udp_hdr->dport);
+            l4_dst_port  = (__mem40 uint16_t *)(&tcp_hdr->dport);
 
             data = (__mem40 uint32_t *)(pbuf + pkt_off
                                              + sizeof(struct eth_hdr)
                                              + sizeof(struct ip4_hdr)
-                                             + sizeof(struct udp_hdr));
+                                             + sizeof(struct tcp_hdr));
 
 
             if (lan_or_wan == 0) {
