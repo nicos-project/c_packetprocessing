@@ -95,7 +95,7 @@ __intrinsic uint8_t find_in_conn_table(uint32_t hash_value, uint32_t table_idx) 
 int main(void)
 {
     // Just use one thread for now
-    if (__ctx() == 0) {
+    // if (__ctx() == 0) {
         // Work queue stuff
         __gpr struct work_t work;
         __gpr struct pkt_ms_info msi;
@@ -268,7 +268,7 @@ int main(void)
                          PORT_TO_TMQ(rx_port), // same port as what we received it on
                          seqr, seq, PKT_CTM_SIZE_256);
         }
-    }
+    // }
 
     return 0;
 }
