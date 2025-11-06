@@ -193,7 +193,7 @@ int main(void)
 
                 // Check if this is a SYN packet
                 // Debug: try different flag checks
-                if (tcp_hdr->flags & 0x02) {  // SYN should be bit 1
+                if (tcp_hdr->flags & NET_TCP_FLAG_SYN) {  // SYN should be bit 1
                     // SYN packet: acquire lock and write directly
                     semaphore_down(&ct_sem[table_idx]);
                     if (ct_bucket_count[table_idx] < CONN_TABLE_MAX_KEYS_PER_BUCKET) {
