@@ -69,7 +69,8 @@ void semaphore_up(volatile __declspec(mem addr40) void * addr)
 // the steering island assigning flows based on the four tuple hash. Each island has 8 MEs serving
 // a set of flows, and more than one ME may end up serving a single flow. That is why we need an island
 // scope lock on the ct_bucket_count and conn_table data structures.
-__declspec(imem export scope(island) aligned(64)) int ct_sem = 1;
+// Each bucket has its own lock in imem for fine-grained concurrency control.
+__declspec(imem export scope(island)) int ct_sem[CONN_TABLE_NUM_BUCKETS];
 __declspec(imem export scope(global)) uint8_t ct_bucket_count[CONN_TABLE_NUM_BUCKETS];
 
 __intrinsic uint8_t find_in_conn_table(uint32_t hash_value, uint32_t table_idx) {
@@ -142,6 +143,7 @@ int main(void)
 
         // Ideally this init should be done by just one ME out of all the MEs
         for (i = 0; i < CONN_TABLE_NUM_BUCKETS; i++) {
+            ct_sem[i] = 1;  // Initialize each bucket's lock
             for (j = 0; j < CONN_TABLE_MAX_KEYS_PER_BUCKET; j++) {
                 conn_table[i].four_tuple_hash_entry[j] = 0;
             }
@@ -189,7 +191,7 @@ int main(void)
                 hash_value = work.hash;
                 table_idx = hash_value & 0x3fff;
 
-                semaphore_down(&ct_sem);
+                semaphore_down(&ct_sem[table_idx]);
                 present_in_conn_table = find_in_conn_table(hash_value, table_idx);
                 if (!present_in_conn_table) {
                     // not found, insert it in the connection table
@@ -208,7 +210,7 @@ int main(void)
                 }
                 else {
                 }
-                semaphore_up(&ct_sem);
+                semaphore_up(&ct_sem[table_idx]);
             }
             else {
                 // WAN port side. The connection should be present in the connection table or else
