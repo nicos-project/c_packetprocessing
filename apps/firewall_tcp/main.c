@@ -69,8 +69,8 @@ void semaphore_up(volatile __declspec(mem addr40) void * addr)
 // the steering island assigning flows based on the four tuple hash. Each island has 8 MEs serving
 // a set of flows, and more than one ME may end up serving a single flow. That is why we need an island
 // scope lock on the ct_bucket_count and conn_table data structures.
-__declspec(emem export scope(island) aligned(64)) int ct_sem = 1;
-__declspec(emem export scope(global)) uint8_t ct_bucket_count[CONN_TABLE_NUM_BUCKETS];
+__declspec(imem export scope(island) aligned(64)) int ct_sem = 1;
+__declspec(imem export scope(global)) uint8_t ct_bucket_count[CONN_TABLE_NUM_BUCKETS];
 
 __intrinsic uint8_t find_in_conn_table(uint32_t hash_value, uint32_t table_idx) {
     __gpr uint32_t cur_idx = 0;
