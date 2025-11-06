@@ -248,6 +248,8 @@ def start_tpt_exp(nw_func, num_runs):
                     rx_pps = port_0_stats.get("rx_pps", 0)
                     rx_gbps = (rx_pps * pkt_size_l1_bits) / 1_000_000_000
                     tpts_achieved.append(rx_gbps)
+                    # only increment if the test passed otherwise the size
+                    # of tpts_achieved will be less than the number of runs
                     i += 1
 
                 stop_trex_server(proc)
