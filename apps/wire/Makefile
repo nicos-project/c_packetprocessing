@@ -171,6 +171,18 @@ wire.fw: $(wire_LIST_FILES)
 	-u mei1.me9 -l $(WIRE_LIST) \
 	-u mei1.me10 -l $(WIRE_LIST) \
 	-u mei1.me11 -l $(WIRE_LIST) \
+	-u mei2.me0 -l $(WIRE_LIST) \
+	-u mei2.me1 -l $(WIRE_LIST) \
+	-u mei2.me2 -l $(WIRE_LIST) \
+	-u mei2.me3 -l $(WIRE_LIST) \
+	-u mei2.me4 -l $(WIRE_LIST) \
+	-u mei2.me5 -l $(WIRE_LIST) \
+	-u mei2.me6 -l $(WIRE_LIST) \
+	-u mei2.me7 -l $(WIRE_LIST) \
+	-u mei2.me8 -l $(WIRE_LIST) \
+	-u mei2.me9 -l $(WIRE_LIST) \
+	-u mei2.me10 -l $(WIRE_LIST) \
+	-u mei2.me11 -l $(WIRE_LIST) \
 	-u ila0.me0 -l $(ME_BLM_LIST) \
 	-i i8 -e $(PICO_CODE)
 

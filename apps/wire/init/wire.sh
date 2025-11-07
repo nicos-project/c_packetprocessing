@@ -57,7 +57,7 @@ case "$1" in
 
 
         echo -n " - Init DMA..."
-        nfp init dma 0 ${CONFIG_DIR}/nfp_nbi8_dma_i32_i33.json &> $OUTPUT || exit 1
+        nfp init dma 0 ${CONFIG_DIR}/nfp_nbi8_dma_i32_i33_i34.json &> $OUTPUT || exit 1
         echo "done"
 
 

@@ -93,7 +93,7 @@ main(void)
 
         pkt_off -= 4;
         msi = pkt_msd_write(pbuf, pkt_off);
-        out_port = (in_port) ? 0 : 4;
+        out_port = in_port;
         pkt_nbi_send(pi->isl,
                      pi->pnum,
                      &msi,
