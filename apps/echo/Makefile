@@ -171,6 +171,18 @@ echo.fw: $(echo_LIST_FILES)
 	-u mei1.me9 -l $(echo_LIST) \
 	-u mei1.me10 -l $(echo_LIST) \
 	-u mei1.me11 -l $(echo_LIST) \
+	-u mei2.me0 -l $(echo_LIST) \
+	-u mei2.me1 -l $(echo_LIST) \
+	-u mei2.me2 -l $(echo_LIST) \
+	-u mei2.me3 -l $(echo_LIST) \
+	-u mei2.me4 -l $(echo_LIST) \
+	-u mei2.me5 -l $(echo_LIST) \
+	-u mei2.me6 -l $(echo_LIST) \
+	-u mei2.me7 -l $(echo_LIST) \
+	-u mei2.me8 -l $(echo_LIST) \
+	-u mei2.me9 -l $(echo_LIST) \
+	-u mei2.me10 -l $(echo_LIST) \
+	-u mei2.me11 -l $(echo_LIST) \
 	-u ila0.me0 -l $(ME_BLM_LIST) \
 	-i i8 -e $(PICO_CODE)
 

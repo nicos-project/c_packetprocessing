@@ -11,46 +11,44 @@
 int main(void)
 {
     // Just use one thread for now
-    if (__ctx() == 0) {
-        __gpr struct pkt_ms_info msi;
-        __gpr int in_port;
-        // __gpr uint16_t me_num = __MENUM;
-        // __gpr uint16_t t_num = __ctx();
-        // __gpr uint16_t isl_num = __ISLAND;
-        __gpr uint8_t pkt_off = PKT_NBI_OFFSET + MAC_PREPEND_BYTES;
-        __xread struct nbi_meta_catamaran nbi_meta;
-        __xread struct nbi_meta_pkt_info *pi = &nbi_meta.pkt_info;
-        __declspec(ctm shared) __mem40 char *pbuf;
-        // __declspec(ctm shared) __mem40 uint16_t *data;
+    __gpr struct pkt_ms_info msi;
+    __gpr int in_port;
+    // __gpr uint16_t me_num = __MENUM;
+    // __gpr uint16_t t_num = __ctx();
+    // __gpr uint16_t isl_num = __ISLAND;
+    __gpr uint8_t pkt_off = PKT_NBI_OFFSET + MAC_PREPEND_BYTES;
+    __xread struct nbi_meta_catamaran nbi_meta;
+    __xread struct nbi_meta_pkt_info *pi = &nbi_meta.pkt_info;
+    __declspec(ctm shared) __mem40 char *pbuf;
+    // __declspec(ctm shared) __mem40 uint16_t *data;
 
-        for (;;) {
-            // Receive a packet
-            pkt_nbi_recv(&nbi_meta, sizeof(nbi_meta));
-            in_port = MAC_TO_PORT(nbi_meta.port);
-            pbuf = pkt_ctm_ptr40(pi->isl, pi->pnum, 0);
-            // data = (__mem40 uint16_t *)(pbuf + pkt_off
-            //                                  + sizeof(struct eth_hdr)
-            //                                  + sizeof(struct ip4_hdr)
-            //                                  + sizeof(struct udp_hdr));
+    for (;;) {
+        // Receive a packet
+        pkt_nbi_recv(&nbi_meta, sizeof(nbi_meta));
+        in_port = MAC_TO_PORT(nbi_meta.port);
+        pbuf = pkt_ctm_ptr40(pi->isl, pi->pnum, 0);
+        // data = (__mem40 uint16_t *)(pbuf + pkt_off
+        //                                  + sizeof(struct eth_hdr)
+        //                                  + sizeof(struct ip4_hdr)
+        //                                  + sizeof(struct udp_hdr));
 
-            // Do nothing
-            // *data = t_num;
-            // data += 1;
-            // *data = me_num;
-            // data += 1;
-            // *data = isl_num;
+        // Do nothing
+        // *data = t_num;
+        // data += 1;
+        // *data = me_num;
+        // data += 1;
+        // *data = isl_num;
 
-            // Send the packet back
-            pkt_mac_egress_cmd_write(pbuf, pkt_off, 1, 1);
-            msi = pkt_msd_write(pbuf, pkt_off - 4);
-            pkt_nbi_send(pi->isl,
-                         pi->pnum,
-                         &msi,
-                         pi->len - MAC_PREPEND_BYTES + 4,
-                         NBI,
-                         PORT_TO_TMQ(in_port), // same port as what we received it on
-                         nbi_meta.seqr, nbi_meta.seq, PKT_CTM_SIZE_256);
-        }
+        // Send the packet back
+        pkt_mac_egress_cmd_write(pbuf, pkt_off, 1, 1);
+        msi = pkt_msd_write(pbuf, pkt_off - 4);
+        pkt_nbi_send(pi->isl,
+                     pi->pnum,
+                     &msi,
+                     pi->len - MAC_PREPEND_BYTES + 4,
+                     NBI,
+                     PORT_TO_TMQ(in_port), // same port as what we received it on
+                     nbi_meta.seqr, nbi_meta.seq, PKT_CTM_SIZE_256);
     }
 
     return 0;
