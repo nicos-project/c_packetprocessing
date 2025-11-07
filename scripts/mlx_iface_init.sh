@@ -39,4 +39,8 @@ sudo ip link set "$IFACE" multicast off
 echo "Enabling promiscuous mode..."
 sudo ip link set dev "$IFACE" promisc on
 
+# Disable pause frames
+echo "Disabling pause frames..."
+sudo ethtool -A "$IFACE" rx off tx off autoneg off
+
 echo "Interface $IFACE setup complete!"
