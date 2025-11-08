@@ -211,14 +211,14 @@ int main(void)
                     semaphore_up(&ct_sem[table_idx]);
 
                     // Mark write operation: set dport to 10000
-                    *l4_dst_port = 30000;
+                    // *l4_dst_port = 30000;
                 }
                 else {
                     // Non-SYN packet: only read, no lock needed
                     present_in_conn_table = find_in_conn_table(hash_value, table_idx);
 
                     // Mark read operation: set dport to 20000
-                    *l4_dst_port = 20000;
+                    // *l4_dst_port = 20000;
                 }
             }
             else {
@@ -248,14 +248,14 @@ int main(void)
             }
 
             // Swap IP addresses
-            ip_tmp = ip_hdr->src;
-            ip_hdr->src = ip_hdr->dst;
-            ip_hdr->dst = ip_tmp;
+            // ip_tmp = ip_hdr->src;
+            // ip_hdr->src = ip_hdr->dst;
+            // ip_hdr->dst = ip_tmp;
 
             // Swap ports
-            port_tmp = *l4_src_port;
-            *l4_src_port = *l4_dst_port;
-            *l4_dst_port = port_tmp;
+            // port_tmp = *l4_src_port;
+            // *l4_src_port = *l4_dst_port;
+            // *l4_dst_port = port_tmp;
 
             // Send the packet back
             pkt_mac_egress_cmd_write(pbuf, pkt_off, 1, 1);

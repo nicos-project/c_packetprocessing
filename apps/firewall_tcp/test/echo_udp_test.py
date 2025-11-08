@@ -28,7 +28,7 @@ class PacketSender(threading.Thread):
 
     def send_packets(self):
         base_ip_hex = 0xC0A80101
-        count = 100
+        count = 10
         cur_count = 0
         num_flows = 1
         cur_flow = 0
