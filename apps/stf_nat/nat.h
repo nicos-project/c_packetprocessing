@@ -14,6 +14,8 @@
 #define NAT_LTW_TABLE_NUM_BUCKETS 0x4000
 #define NAT_LTW_TABLE_ID_MASK 0x3fff
 
+#define NAT_TABLE_MEM_TYPE imem
+
 struct nat_ltw_bucket_entry {
     uint32_t four_tuple_hash;
     uint16_t wan_port;
@@ -27,7 +29,7 @@ struct nat_ltw_bucket {
 // WAN port. The value is an index in an array of nat_wtl_lkup_value
 // structures which stores the IP and port that need to be swapped.
 // Change the name to something else for this
-struct nat_wtl_lkup_value {
+struct nat_wtl_bucket {
     union {
         struct {
             uint32_t dest_ip;

@@ -16,11 +16,11 @@
 #include "nat.h"
 
 // Global NAT state
-__declspec(imem export scope(global)) struct nat_ltw_bucket nat_ltw_lkup_table[NAT_LTW_TABLE_NUM_BUCKETS];
-__declspec(imem export scope(global)) uint8_t ltw_bucket_count[NAT_LTW_TABLE_NUM_BUCKETS];
-__declspec(imem export scope(global)) struct nat_wtl_lkup_value nat_wtl_lkup_table[WAN_PORT_POOL_SIZE];
-__declspec(imem export scope(island) aligned(64)) int nat_per_island_sem = 1;
-__declspec(imem export scope(island)) uint16_t cur_wan_port = 0;
+__declspec(NAT_TABLE_MEM_TYPE export scope(global)) struct nat_ltw_bucket nat_ltw_table[NAT_LTW_TABLE_NUM_BUCKETS];
+__declspec(NAT_TABLE_MEM_TYPE export scope(global)) uint8_t ltw_bucket_count[NAT_LTW_TABLE_NUM_BUCKETS];
+__declspec(NAT_TABLE_MEM_TYPE export scope(global)) struct nat_wtl_bucket nat_wtl_table[WAN_PORT_POOL_SIZE];
+__declspec(NAT_TABLE_MEM_TYPE export scope(island) aligned(64)) int nat_per_island_sem = 1;
+__declspec(NAT_TABLE_MEM_TYPE export scope(island)) uint16_t cur_wan_port = 0;
 
 void semaphore_down(volatile __declspec(mem addr40) void * addr)
 {
@@ -60,11 +60,11 @@ __intrinsic int32_t find_in_nat_ltw_table(uint32_t hash_value, uint32_t table_id
     __gpr uint32_t cur_idx = 0;
     __gpr int32_t wan_port = -1;
     while (cur_idx < NAT_LTW_TABLE_MAX_ENTRIES_PER_BUCKET) {
-        if (nat_ltw_lkup_table[table_idx].entry[cur_idx].four_tuple_hash == hash_value) {
-            wan_port = nat_ltw_lkup_table[table_idx].entry[cur_idx].wan_port;
+        if (nat_ltw_table[table_idx].entry[cur_idx].four_tuple_hash == hash_value) {
+            wan_port = nat_ltw_table[table_idx].entry[cur_idx].wan_port;
             break;
         }
-        else if (nat_ltw_lkup_table[table_idx].entry[cur_idx].four_tuple_hash == 0) {
+        else if (nat_ltw_table[table_idx].entry[cur_idx].four_tuple_hash == 0) {
             // we initialize all entries to zero in the start
             // and add them sequentially, so if we found a 0 entry
             // we can break since there are no entries further down
@@ -111,13 +111,13 @@ int main(void)
         // Initialize the LAN to WAN table
         for (i = 0; i < NAT_LTW_TABLE_NUM_BUCKETS; i++) {
             for (j = 0; j < NAT_LTW_TABLE_MAX_ENTRIES_PER_BUCKET; j++) {
-                nat_ltw_lkup_table[i].entry[j].four_tuple_hash = 0;
-                nat_ltw_lkup_table[i].entry[j].wan_port = 0;
+                nat_ltw_table[i].entry[j].four_tuple_hash = 0;
+                nat_ltw_table[i].entry[j].wan_port = 0;
             }
         }
 
         for (i = 0; i < WAN_PORT_POOL_SIZE; i++) {
-            nat_wtl_lkup_table[i].word64 = 0;
+            nat_wtl_table[i].word64 = 0;
         }
 
         island = __ISLAND;
@@ -181,14 +181,14 @@ int main(void)
                     // grab a lock and add to the NAT LTW and WTL tables
                     semaphore_down(&nat_per_island_sem);
 
-                    nat_ltw_lkup_table[table_idx].entry[ltw_bucket_count[table_idx]].four_tuple_hash = hash_value;
-                    nat_ltw_lkup_table[table_idx].entry[ltw_bucket_count[table_idx]].wan_port = cur_wan_port;
+                    nat_ltw_table[table_idx].entry[ltw_bucket_count[table_idx]].four_tuple_hash = hash_value;
+                    nat_ltw_table[table_idx].entry[ltw_bucket_count[table_idx]].wan_port = cur_wan_port;
                     ltw_bucket_count[table_idx]++;
                     wan_port = cur_wan_port++;
 
-                    nat_wtl_lkup_table[wan_port - WAN_PORT_START].dest_ip = ip_hdr->src;
-                    nat_wtl_lkup_table[wan_port - WAN_PORT_START].port = *l4_src_port;
-                    nat_wtl_lkup_table[wan_port - WAN_PORT_START].valid = 0x1;
+                    nat_wtl_table[wan_port - WAN_PORT_START].dest_ip = ip_hdr->src;
+                    nat_wtl_table[wan_port - WAN_PORT_START].port = *l4_src_port;
+                    nat_wtl_table[wan_port - WAN_PORT_START].valid = 0x1;
 
                     semaphore_up(&nat_per_island_sem);
                 }
@@ -212,9 +212,9 @@ int main(void)
             else {
                 // WAN to LAN traffic
                 nat_wtl_lkup_idx = *l4_dst_port - WAN_PORT_START;
-                if (nat_wtl_lkup_table[nat_wtl_lkup_idx].valid) {
-                    ip_hdr->dst = nat_wtl_lkup_table[nat_wtl_lkup_idx].dest_ip;
-                    *l4_dst_port = nat_wtl_lkup_table[nat_wtl_lkup_idx].port;
+                if (nat_wtl_table[nat_wtl_lkup_idx].valid) {
+                    ip_hdr->dst = nat_wtl_table[nat_wtl_lkup_idx].dest_ip;
+                    *l4_dst_port = nat_wtl_table[nat_wtl_lkup_idx].port;
                 }
                 else {
                     // we have a problem, send a signal to the testing script
