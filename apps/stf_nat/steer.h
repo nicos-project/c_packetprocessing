@@ -1,5 +1,5 @@
-#ifndef __STEER_H__
-#define __STEER_H__
+#ifndef __STEER_H_
+#define __STEER_H_
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -26,6 +26,7 @@ __packed struct work_t
   uint32_t plen:11;
   uint32_t hash:32;
   uint32_t rx_port:3;
+  uint32_t lan_or_wan:1;
 } __align(4);
 
-#endif /* STEER_H_ */
+#endif /* __STEER_H_ */

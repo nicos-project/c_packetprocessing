@@ -4,7 +4,6 @@
 #include <stdint.h>
 #include <net/eth.h>
 #include <net/ip.h>
-#include <net/udp.h>
 #include <net/tcp.h>
 #include <std/hash.h>
 #include <nfp/me.h>
@@ -34,6 +33,7 @@ int main(void)
 
         // NAT stuff
         __gpr int i;
+        __gpr uint32_t lan_or_wan;
         __gpr uint16_t wan_port = 0;
         __xread struct nbi_meta_catamaran nbi_meta;
         __xread struct nbi_meta_pkt_info *pi = &nbi_meta.pkt_info;
@@ -108,13 +108,7 @@ int main(void)
                                              + sizeof(struct tcp_hdr));
             ip_src = ip_hdr->src;
 
-            // Assume for now that the LAN IPs are in range 192.168.1.0/24
-            // Alternatively, we could also check the destination IP and see if it matches the WAN IP
-            // to make this decision
-            ip_src = ip_src >> 8; // TODO: it should be right shifted by 32 - prefix length
-
-            // TODO: Move this if condition to the steering core and see how it affects performance
-            if (!(ip_src ^ 0x00C0A801)) {
+            if (lan_or_wan == 0) {
                 // Now perform a lookup in the LAN to WAN table
                 ltw_lkup_key.word64 = 0;
                 ltw_lkup_key.ip_src = ip_hdr->src;
