@@ -1,11 +1,10 @@
 #ifndef __NAT_H__
 #define __NAT_H__
 
-// Avoiding the well-known ports (0-1023)
-#define WAN_PORT_START 1024
-// This is 64512 and is the maximum number of connections we can
-// support even though we have more entries in the LAN to WAN conversion
-// table
+// Not avoiding the well-known ports (0-1023) to make our lives simpler. This is not
+// production ready!
+#define WAN_PORT_START 0
+// This is 65536 and is the maximum number of connections we can support
 #define WAN_PORT_POOL_SIZE UINT16_MAX - WAN_PORT_START + 1
 
 #define WAN_IP_HEX 0x36EF1C55 // 54.239.28.85
@@ -22,7 +21,8 @@ struct nat_ltw_bucket_entry {
 };
 
 struct nat_ltw_bucket {
-    struct nat_ltw_bucket_entry entry[NAT_LTW_TABLE_MAX_ENTRIES_PER_BUCKET];
+    uint8_t bucket_count; // number of entries full in the bucket
+    struct nat_ltw_bucket_entry entry[NAT_LTW_TABLE_MAX_ENTRIES_PER_BUCKET]; // actual entries consisting of four_tuple_hash and the wan port
 };
 
 // WAN to LAN key is the UDP destination port on the incoming packet on the

@@ -11,7 +11,7 @@ import threading
 import os
 from datetime import datetime
 
-num_ports_per_client = 4
+num_ports_per_client = 65536
 num_clients = 1
 
 num_syn_pkts = 0
@@ -21,7 +21,7 @@ lan_src_port_start = 0
 
 wan_ip = "54.239.28.85"
 # Avoiding the well-known ports (0-1023)
-wan_dst_port_start = 1024
+wan_dst_port_start = 0
 
 # Assume all clients talk to the same application on the public internet
 # This seems like a strong assumption, but the application clients talk to doesn't
@@ -130,6 +130,8 @@ class PacketSender(threading.Thread):
                 dst_ip = public_app_ip
                 dst_port = public_app_port
                 p = Ether() / IP(src=src_ip, dst=dst_ip) / TCP(sport=src_port, dport=dst_port) / Raw(b"\x00" * 18)
+                if exit_sender:
+                    return
                 sendp(p, iface=iface, verbose=0)
                 print(f"{src_ip}:{src_port} -> {self.num_packets_per_port}")
 
@@ -395,7 +397,7 @@ class PacketReceiver(threading.Thread):
 
                             # Checks for packets mirrored on the LAN port
                             # 1. The source IP is swapped with the WAN IP
-                            # 2. The source UDP port is swaped with a valid WAN port. It should be in the range [1024, 65535]
+                            # 2. The source UDP port is swaped with a valid WAN port. It should be in the range [0, 65535]
                             if self.mode == "ltw":
                                 if udp_info['payload'][0:4] == b'\xff\xff\xff\xff':
                                     raise Exception("NAT table ran out of buckets")

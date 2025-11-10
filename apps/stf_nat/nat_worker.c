@@ -17,10 +17,8 @@
 
 // Global NAT state
 __declspec(NAT_TABLE_MEM_TYPE export scope(global)) struct nat_ltw_bucket nat_ltw_table[NAT_LTW_TABLE_NUM_BUCKETS];
-__declspec(NAT_TABLE_MEM_TYPE export scope(global)) uint8_t ltw_bucket_count[NAT_LTW_TABLE_NUM_BUCKETS];
+__declspec(NAT_TABLE_MEM_TYPE export scope(global) aligned(64)) int nat_per_bucket_sem[NAT_LTW_TABLE_NUM_BUCKETS];
 __declspec(NAT_TABLE_MEM_TYPE export scope(global)) struct nat_wtl_bucket nat_wtl_table[WAN_PORT_POOL_SIZE];
-__declspec(NAT_TABLE_MEM_TYPE export scope(island) aligned(64)) int nat_per_island_sem = 1;
-__declspec(NAT_TABLE_MEM_TYPE export scope(island)) uint16_t cur_wan_port = 0;
 
 void semaphore_down(volatile __declspec(mem addr40) void * addr)
 {
@@ -93,6 +91,7 @@ int main(void)
         __gpr uint32_t lan_or_wan;
         __gpr uint32_t hash_value;
         __gpr int32_t wan_port = -1;
+        __gpr uint32_t bucket_wan_port_start;
         __xread struct nbi_meta_catamaran nbi_meta;
         __xread struct nbi_meta_pkt_info *pi = &nbi_meta.pkt_info;
         __declspec(ctm shared) __mem40 char *pbuf;
@@ -104,24 +103,11 @@ int main(void)
         __gpr uint32_t ip_src;
 
         // NAT LTW table stuff
-        __gpr uint32_t table_idx;
+        __gpr uint32_t table_idx, bucket_idx;
         __gpr uint16_t nat_wtl_lkup_idx = 0;
         SIGNAL work_sig;
 
-        // Initialize the LAN to WAN table
-        for (i = 0; i < NAT_LTW_TABLE_NUM_BUCKETS; i++) {
-            for (j = 0; j < NAT_LTW_TABLE_MAX_ENTRIES_PER_BUCKET; j++) {
-                nat_ltw_table[i].entry[j].four_tuple_hash = 0;
-                nat_ltw_table[i].entry[j].wan_port = 0;
-            }
-        }
-
-        for (i = 0; i < WAN_PORT_POOL_SIZE; i++) {
-            nat_wtl_table[i].word64 = 0;
-        }
-
         island = __ISLAND;
-        cur_wan_port = WAN_PORT_START + (__ISLAND - 33) * 16128; // 64512 divided by 4 worker islands, each island serves 16128 flows
 
         if (island == 33) {
           rnum = MEM_RING_GET_NUM(flow_ring_0);
@@ -138,6 +124,20 @@ int main(void)
         else if (island == 36) {
           rnum = MEM_RING_GET_NUM(flow_ring_3);
           raddr_hi = MEM_RING_GET_MEMADDR(flow_ring_3);
+        }
+
+        for (i = 0; i < NAT_LTW_TABLE_NUM_BUCKETS; i++) {
+            nat_ltw_table[i].bucket_count = 0;
+            bucket_wan_port_start = WAN_PORT_START + (i * NAT_LTW_TABLE_MAX_ENTRIES_PER_BUCKET);
+            nat_per_bucket_sem[i] = 1;
+            for (j = 0; j < NAT_LTW_TABLE_MAX_ENTRIES_PER_BUCKET; j++) {
+                nat_ltw_table[i].entry[j].four_tuple_hash = 0;
+                nat_ltw_table[i].entry[j].wan_port = bucket_wan_port_start + j;
+            }
+        }
+
+        for (i = 0; i < WAN_PORT_POOL_SIZE; i++) {
+            nat_wtl_table[i].word64 = 0;
         }
 
         for (;;) {
@@ -180,20 +180,25 @@ int main(void)
                 table_idx = hash_value & NAT_LTW_TABLE_ID_MASK;
 
                 if (tcp_hdr->flags & NET_TCP_FLAG_SYN) {
-                    semaphore_down(&nat_per_island_sem);
+                    semaphore_down(&nat_per_bucket_sem[table_idx]);
 
-                    nat_ltw_table[table_idx].entry[ltw_bucket_count[table_idx]].four_tuple_hash = hash_value;
-                    nat_ltw_table[table_idx].entry[ltw_bucket_count[table_idx]].wan_port = cur_wan_port;
-                    ltw_bucket_count[table_idx]++;
-                    wan_port = cur_wan_port++;
+                    bucket_idx = nat_ltw_table[table_idx].bucket_count;
+                    nat_ltw_table[table_idx].entry[bucket_idx].four_tuple_hash = hash_value;
+                    wan_port = nat_ltw_table[table_idx].entry[bucket_idx].wan_port;
+                    nat_ltw_table[table_idx].bucket_count++;
 
+                    // Update the WAN to LAN table too
                     nat_wtl_table[wan_port - WAN_PORT_START].dest_ip = ip_hdr->src;
                     nat_wtl_table[wan_port - WAN_PORT_START].port = *l4_src_port;
                     nat_wtl_table[wan_port - WAN_PORT_START].valid = 0x1;
 
                     *data = 0x12345678;
+                    data += 1;
+                    *data = table_idx;
+                    data += 1;
+                    *data = bucket_idx;
 
-                    semaphore_up(&nat_per_island_sem);
+                    semaphore_up(&nat_per_bucket_sem[table_idx]);
                 }
                 else {
                     // find the wan port in the NAT table
