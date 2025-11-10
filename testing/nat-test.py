@@ -11,16 +11,17 @@ import threading
 import os
 from datetime import datetime
 
-num_ports_per_client = 252
-num_clients = 256
+num_ports_per_client = 4
+num_clients = 1
 
-lan_iface = "ens3f0np0"
-lan_udp_src_port_start = 4096
+num_syn_pkts = 0
 
-wan_iface = "ens3f1np1"
+iface = "ens3f0np0"
+lan_src_port_start = 0
+
 wan_ip = "54.239.28.85"
 # Avoiding the well-known ports (0-1023)
-wan_udp_dst_port_start = 1024
+wan_dst_port_start = 1024
 
 # Assume all clients talk to the same application on the public internet
 # This seems like a strong assumption, but the application clients talk to doesn't
@@ -45,8 +46,8 @@ NAT Traffic Tester
 
 Usage:
     python3 nat-test.py <packets_per_port>                  # Test both LAN to WAN and WAN to LAN
-    python3 nat-test.py ltw <packets_per_port>              # Test LAN to WAN only 
-    python3 nat-test.py wtl <packets_per_port>              # Test WAN to LAN only 
+    python3 nat-test.py ltw <packets_per_port>              # Test LAN to WAN only
+    python3 nat-test.py wtl <packets_per_port>              # Test WAN to LAN only
     python3 nat-test.py -h | --help                         # Show this help message
 
 Arguments:
@@ -55,7 +56,7 @@ Arguments:
     packets_per_port    Number of packets to send per port (required)
 
 Examples:
-    python3 nat-test.py 10           # Send 10 packets per port in both directions 
+    python3 nat-test.py 10           # Send 10 packets per port in both directions
     python3 nat-test.py ltw 25       # Send 25 packets per port from LAN to WAN
     python3 nat-test.py wtl 5        # Send 5 packets per port from WAN to LAN
 """
@@ -109,16 +110,36 @@ def parse_arguments():
     return mode, packets_per_port
 
 class PacketSender(threading.Thread):
-    def __init__(self, mode, packets_per_port, interface=None):
+    def __init__(self, mode, packets_per_port, stf_mode, interface=None):
         threading.Thread.__init__(self)
         self.interface = interface
         self.sender_thread = None
         self.mode = mode
+        self.use_tcp = stf_mode
         self.num_packets_per_port = packets_per_port
 
+    def send_syn_packets(self):
+        base_ip_hex = 0xC0A80101
+        for client_idx in range(0, num_clients):
+            for port_idx in range(0, num_ports_per_client):
+                # Calculate new IP by adding client_idx to the base IP
+                new_ip_hex = base_ip_hex + client_idx
+                # Convert back to dotted decimal notation
+                src_ip = f"{(new_ip_hex >> 24) & 0xFF}.{(new_ip_hex >> 16) & 0xFF}.{(new_ip_hex >> 8) & 0xFF}.{new_ip_hex & 0xFF}"
+                src_port = lan_src_port_start + port_idx
+                dst_ip = public_app_ip
+                dst_port = public_app_port
+                p = Ether() / IP(src=src_ip, dst=dst_ip) / TCP(sport=src_port, dport=dst_port) / Raw(b"\x00" * 18)
+                sendp(p, iface=iface, verbose=0)
+                print(f"{src_ip}:{src_port} -> {self.num_packets_per_port}")
+
     def send_lan_to_wan_traffic(self):
+        if self.use_tcp:
+            print("Sending SYN Packets")
+            self.send_syn_packets()
+
         print("Starting LAN to WAN traffic ======>")
-        print("LAN to WAN sender stats (Source IP address and UDP port):")
+        print(f"LAN to WAN sender stats (Source IP address and {'TCP' if self.use_tcp else 'UDP'} port):")
         # Base IP: 192.168.1.1 as hex = 0xC0A80101
         # Avoiding the 192.168.0.x subnet since that is a valid subnet in pikachu
         base_ip_hex = 0xC0A80101
@@ -128,20 +149,26 @@ class PacketSender(threading.Thread):
                 new_ip_hex = base_ip_hex + client_idx
                 # Convert back to dotted decimal notation
                 src_ip = f"{(new_ip_hex >> 24) & 0xFF}.{(new_ip_hex >> 16) & 0xFF}.{(new_ip_hex >> 8) & 0xFF}.{new_ip_hex & 0xFF}"
-                src_port = lan_udp_src_port_start + port_idx
+                src_port = lan_src_port_start + port_idx
                 dst_ip = public_app_ip
                 dst_port = public_app_port
-                p = Ether() / IP(src = src_ip, dst = dst_ip) / UDP(sport = src_port, dport = dst_port) / Raw(b"\x00" * 18)
+
+                # Create packet based on protocol type
+                if self.use_tcp:
+                    p = Ether() / IP(src=src_ip, dst=dst_ip) / TCP(sport=src_port, dport=dst_port, flags=0) / Raw(b"\x00" * 18)
+                else:
+                    p = Ether() / IP(src=src_ip, dst=dst_ip) / UDP(sport=src_port, dport=dst_port) / Raw(b"\x00" * 18)
+
                 for i in range(0, self.num_packets_per_port):
                     if exit_sender:
                         return
-                    sendp(p, iface=lan_iface, verbose=0)
+                    sendp(p, iface=iface, verbose=0)
                 print(f"{src_ip}:{src_port} -> {self.num_packets_per_port}")
                 lan_to_wan_send_stats[f"{src_ip}:{src_port}"] = self.num_packets_per_port
 
     def send_wan_to_lan_traffic(self):
         print("Starting WAN to LAN traffic ======>")
-        print("WAN to LAN sender stats (Destination IP address and UDP port):")
+        print(f"WAN to LAN sender stats (Destination IP address and {'TCP' if self.use_tcp else 'UDP'} port):")
         if len(lan_to_wan_recv_stats) > 0:
             # send what we received during LAN to WAN traffic
             # this is useful in case we use a steering island to assign
@@ -153,11 +180,17 @@ class PacketSender(threading.Thread):
                 src_port = public_app_port
                 dst_ip = wan_ip
                 dst_port = port
-                p = Ether() / IP(src = src_ip, dst = wan_ip) / UDP(sport = src_port, dport = dst_port) / Raw(b"\x00" * 18)
+
+                # Create packet based on protocol type
+                if self.use_tcp:
+                    p = Ether() / IP(src=src_ip, dst=wan_ip) / TCP(sport=src_port, dport=dst_port, flags = 0) / Raw(b"\x00" * 18)
+                else:
+                    p = Ether() / IP(src=src_ip, dst=wan_ip) / UDP(sport=src_port, dport=dst_port) / Raw(b"\x00" * 18)
+
                 for i in range(0, self.num_packets_per_port):
                     if exit_sender:
                         return
-                    sendp(p, iface=wan_iface, verbose=0)
+                    sendp(p, iface=iface, verbose=0)
                 print(f"{wan_ip}:{dst_port} -> {self.num_packets_per_port}")
                 wan_to_lan_send_stats[f"{wan_ip}:{dst_port}"] = self.num_packets_per_port
         else:
@@ -166,12 +199,18 @@ class PacketSender(threading.Thread):
                 src_ip = public_app_ip
                 src_port = public_app_port
                 dst_ip = wan_ip
-                dst_port = wan_udp_dst_port_start + port_idx
-                p = Ether() / IP(src = src_ip, dst = wan_ip) / UDP(sport = src_port, dport = dst_port) / Raw(b"\x00" * 18)
+                dst_port = wan_dst_port_start + port_idx
+
+                # Create packet based on protocol type
+                if self.use_tcp:
+                    p = Ether() / IP(src=src_ip, dst=wan_ip) / TCP(sport=src_port, dport=dst_port, flags=0) / Raw(b"\x00" * 18)
+                else:
+                    p = Ether() / IP(src=src_ip, dst=wan_ip) / UDP(sport=src_port, dport=dst_port) / Raw(b"\x00" * 18)
+
                 for i in range(0, self.num_packets_per_port):
                     if exit_sender:
                         return
-                    sendp(p, iface=wan_iface, verbose=0)
+                    sendp(p, iface=iface, verbose=0)
                 print(f"{wan_ip}:{dst_port} -> {self.num_packets_per_port}")
                 wan_to_lan_send_stats[f"{wan_ip}:{dst_port}"] = self.num_packets_per_port
 
@@ -254,6 +293,55 @@ class PacketReceiver(threading.Thread):
             'payload': data[8:]
         }
 
+    def parse_tcp_header(self, data):
+        """Parse TCP header"""
+        if len(data) < 20:  # Minimum TCP header size is 20 bytes
+            return None
+
+        # Unpack the fixed portion of TCP header (first 20 bytes)
+        tcp_header = struct.unpack('!HHIIBBHHH', data[:20])
+
+        src_port = tcp_header[0]
+        dest_port = tcp_header[1]
+        seq_num = tcp_header[2]
+        ack_num = tcp_header[3]
+        offset_reserved = tcp_header[4]
+        flags = tcp_header[5]
+        window = tcp_header[6]
+        checksum = tcp_header[7]
+        urgent_ptr = tcp_header[8]
+
+        # Data offset is in the upper 4 bits, represents number of 32-bit words
+        data_offset = (offset_reserved >> 4) * 4
+
+        # Extract individual flag bits
+        flag_fin = flags & 0x01
+        flag_syn = flags & 0x02
+        flag_rst = flags & 0x04
+        flag_psh = flags & 0x08
+        flag_ack = flags & 0x10
+        flag_urg = flags & 0x20
+
+        return {
+            'src_port': src_port,
+            'dest_port': dest_port,
+            'seq_num': seq_num,
+            'ack_num': ack_num,
+            'data_offset': data_offset,
+            'flags': {
+                'fin': flag_fin,
+                'syn': flag_syn,
+                'rst': flag_rst,
+                'psh': flag_psh,
+                'ack': flag_ack,
+                'urg': flag_urg
+            },
+            'window': window,
+            'checksum': checksum,
+            'urgent_ptr': urgent_ptr,
+            'payload': data[data_offset:]
+        }
+
     def is_valid_client_ip(self, dest_ip, network_ip="192.168.0.0", prefix_length=16):
         try:
             # Convert IP addresses to integers
@@ -273,8 +361,8 @@ class PacketReceiver(threading.Thread):
             return False
 
     def display_packet(self, data, packet_size, verbose=False):
+        global num_syn_pkts
         """Display packet information"""
-        self.packet_count += 1
         expected_total_pkts = num_clients * num_ports_per_client * self.packets_per_port
         if self.packet_count > expected_total_pkts:
             raise Exception("Received more packets than expected")
@@ -329,7 +417,7 @@ class PacketReceiver(threading.Thread):
                                     print("Invalid WAN port! Aborting...")
                                     raise Exception("Invalid WAN port")
                                 if self.is_valid_client_ip(ip_info['dest_ip']):
-                                    if (udp_info['dest_port'] < lan_udp_src_port_start) or (udp_info['dest_port'] >= lan_udp_src_port_start + num_ports_per_client):
+                                    if (udp_info['dest_port'] < lan_src_port_start) or (udp_info['dest_port'] >= lan_src_port_start + num_ports_per_client):
                                         raise Exception(f"Received an invalid port = {udp_info['dest_port']}")
                                     wtl_key = f"{ip_info['dest_ip']}:{udp_info['dest_port']}"
                                     if wtl_key in wan_to_lan_recv_stats:
@@ -340,6 +428,51 @@ class PacketReceiver(threading.Thread):
                                         raise Exception(f"Received invalid number of packets = {wtl_key}:{wan_to_lan_recv_stats[wtl_key]}")
                                 else:
                                     raise Exception(f"Received an invalid LAN IP = {ip_info['dest_ip']}")
+                        self.packet_count += 1
+
+                    if ip_info['protocol'] == 6:  # TCP
+                        tcp_info = self.parse_tcp_header(ip_info['payload'])
+                        if tcp_info:
+                            if self.mode == "ltw":
+                                if tcp_info['payload'][0:4] == b'\xff\xff\xff\xff':
+                                    raise Exception("Received stop signal from the NAT implementation")
+                                if tcp_info['src_port'] < wan_dst_port_start:
+                                    raise Exception(f"Received an invalid port = {tcp_info['src_port']}")
+                                # ignore the syn packets
+                                if not tcp_info['flags']['syn']:
+                                    self.packet_count += 1
+                                    if ip_info['src_ip'] == wan_ip:
+                                        ltw_key = f"{ip_info['src_ip']}:{tcp_info['src_port']}"
+                                        if ltw_key in lan_to_wan_recv_stats:
+                                            lan_to_wan_recv_stats[ltw_key] += 1
+                                        else:
+                                            lan_to_wan_recv_stats[ltw_key] = 1
+                                        if lan_to_wan_recv_stats[ltw_key] > self.packets_per_port:
+                                            raise Exception(f"Received invalid number of packets = {ltw_key}:{lan_to_wan_recv_stats[ltw_key]}")
+                                    else:
+                                        raise Exception(f"Received an invalid WAN IP = {ip_info['src_ip']}")
+                                else:
+                                    if tcp_info['payload'][0:4] == b'\x12\x34\x56\x78':
+                                        num_syn_pkts += 1
+
+                            if self.mode == "wtl":
+                                if tcp_info['payload'][0:4] == b'\xff\xff\xff\xff':
+                                    print("Invalid WAN port! Aborting...")
+                                    raise Exception("Invalid WAN port")
+                                if self.is_valid_client_ip(ip_info['dest_ip']):
+                                    if (tcp_info['dest_port'] < lan_src_port_start) or (tcp_info['dest_port'] >= lan_src_port_start + num_ports_per_client):
+                                        raise Exception(f"Received an invalid port = {tcp_info['dest_port']}")
+                                    wtl_key = f"{ip_info['dest_ip']}:{tcp_info['dest_port']}"
+                                    if wtl_key in wan_to_lan_recv_stats:
+                                        wan_to_lan_recv_stats[wtl_key] += 1
+                                    else:
+                                        wan_to_lan_recv_stats[wtl_key] = 1
+                                    if wan_to_lan_recv_stats[wtl_key] > self.packets_per_port:
+                                        raise Exception(f"Received invalid number of packets = {wtl_key}:{wan_to_lan_recv_stats[wtl_key]}")
+                                else:
+                                    raise Exception(f"Received an invalid LAN IP = {ip_info['dest_ip']}")
+                                self.packet_count += 1
+
 
         except Exception as e:
             print(f"  Error parsing packet: {e}")
@@ -406,15 +539,13 @@ class PacketReceiver(threading.Thread):
 
 def start_test(mode, num_packets):
     try:
-        iface = lan_iface
-        if mode == "wtl":
-            iface = wan_iface
         receiver = PacketReceiver(mode, num_packets, iface)
         receiver.start()
 
         # sleep for 2 seconds before starting the sender
         time.sleep(2)
-        sender = PacketSender(mode, num_packets, iface)
+        # TODO: Take the stateful mode option from command line
+        sender = PacketSender(mode, num_packets, True, iface)
 
         # this function starts the sender in a separate thread
         sender.start()
@@ -513,6 +644,9 @@ def main():
         end_time = time.perf_counter()
         print(f"Total time = {end_time - start_time}")
         if not exit_sender:
+            if num_syn_pkts != num_clients * num_ports_per_client:
+                print("Failed: Syn packet mismatch")
+                return
             # instead of verifying each test individually
             # we can directly compare the dictionaries to
             # verify that the test passed

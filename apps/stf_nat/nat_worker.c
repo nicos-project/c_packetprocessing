@@ -121,6 +121,7 @@ int main(void)
         }
 
         island = __ISLAND;
+        cur_wan_port = WAN_PORT_START + (__ISLAND - 33) * 16128; // 64512 divided by 4 worker islands, each island serves 16128 flows
 
         if (island == 33) {
           rnum = MEM_RING_GET_NUM(flow_ring_0);
@@ -153,6 +154,7 @@ int main(void)
             seqr = work.seqr;
             seq = work.seq;
             rx_port = work.rx_port;
+            lan_or_wan = work.lan_or_wan;
 
             pbuf = pkt_ctm_ptr40(island, pnum, 0);
 
@@ -178,7 +180,6 @@ int main(void)
                 table_idx = hash_value & NAT_LTW_TABLE_ID_MASK;
 
                 if (tcp_hdr->flags & NET_TCP_FLAG_SYN) {
-                    // grab a lock and add to the NAT LTW and WTL tables
                     semaphore_down(&nat_per_island_sem);
 
                     nat_ltw_table[table_idx].entry[ltw_bucket_count[table_idx]].four_tuple_hash = hash_value;
@@ -189,6 +190,8 @@ int main(void)
                     nat_wtl_table[wan_port - WAN_PORT_START].dest_ip = ip_hdr->src;
                     nat_wtl_table[wan_port - WAN_PORT_START].port = *l4_src_port;
                     nat_wtl_table[wan_port - WAN_PORT_START].valid = 0x1;
+
+                    *data = 0x12345678;
 
                     semaphore_up(&nat_per_island_sem);
                 }
@@ -219,7 +222,7 @@ int main(void)
                 else {
                     // we have a problem, send a signal to the testing script
                     // that it should stop
-                    // *data = 0xffffffff;
+                    *data = 0xffffffff;
                 }
             }
 
