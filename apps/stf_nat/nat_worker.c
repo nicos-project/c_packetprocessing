@@ -75,8 +75,11 @@ __intrinsic int32_t find_in_nat_ltw_table(uint32_t hash_value, uint32_t table_id
 
 int main(void)
 {
-    // Just use one thread for now
-    if (__ctx() == 0) {
+    // With one thread per ME, we are at ~23 Gbps
+    // If we activate all 8, we are at ~25 Gbps
+    // If we remove the packet re-write we are at ~37 Gbps
+
+    // if (__ctx() == 0) {
         // Work queue stuff
         __gpr struct work_t work;
         __gpr struct pkt_ms_info msi;
@@ -242,7 +245,7 @@ int main(void)
                          PORT_TO_TMQ(rx_port), // same port as what we received it on
                          seqr, seq, PKT_CTM_SIZE_256);
         }
-    }
+    // }
 
     return 0;
 }

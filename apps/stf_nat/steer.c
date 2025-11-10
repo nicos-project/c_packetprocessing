@@ -9,8 +9,10 @@
 
 #include "config.h"
 #include "steer.h"
+#include "nat.h"
 
 #define HASH_SEED_VALUE 0x12345678
+#define ISLAND_NUM_MASK 0x3
 
 struct flow_four_tuple {
     union {
@@ -31,7 +33,7 @@ int main() {
   __gpr uint8_t pkt_off = PKT_NBI_OFFSET + MAC_PREPEND_BYTES;
   __gpr uint8_t flow_island = 0;
   __gpr uint32_t flow_hash;
-  __gpr uint32_t ip_src;
+  __gpr uint32_t ip_dst;
   __gpr struct flow_four_tuple flow_4_tuple;
   __gpr uint32_t lan_or_wan;
   __xwrite struct work_t work_xfer;
@@ -53,36 +55,29 @@ int main() {
       tcp_hdr = (__mem40 struct tcp_hdr *)(pbuf + pkt_off
                                                 + sizeof(struct eth_hdr)
                                                 + sizeof(struct ip4_hdr));
-      // 2. Calculate flow hash
-      // First, we need to decide which direction the flow is in (LAN or WAN).
-      // For traffic that arrives on the WAN port, the hash will end up being
-      // different if we don't flip the src/dst. We need the same hash so that the flow
-      // goes to the same island irrespective of the direction.
-      //
-      // Assume for now that the LAN IPs are in range 192.168.1.0/24
-      // Alternatively, we could also check the destination IP and see if it matches
-      // the WAN IP to make this decision. But when we test the firewall, we don't
-      // have a WAN IP, we just have incoming or outgoing traffic.
-      //
-      ip_src = ip_hdr->src;
-      ip_src = ip_src >> 8; // TODO: it should be right shifted by 32 - prefix length
 
-      if (!(ip_src ^ 0x00C0A801)) {
-          // Traffic originating on the LAN port
-          flow_4_tuple.ip_src = ip_hdr->src;
-          flow_4_tuple.ip_dst = ip_hdr->dst;
-          flow_4_tuple.l4_src = tcp_hdr->sport;
-          flow_4_tuple.l4_dst = tcp_hdr->dport;
-          lan_or_wan = 0;
-      }
-      else {
-          // Traffic originating on the WAN port
-          flow_4_tuple.ip_src = ip_hdr->dst;
-          flow_4_tuple.ip_dst = ip_hdr->src;
-          flow_4_tuple.l4_src = tcp_hdr->dport;
-          flow_4_tuple.l4_dst = tcp_hdr->sport;
+      // 2. We need to decide which direction the flow is in (LAN or WAN).
+      // We check the destination IP and see if it matches the WAN IP to make
+      // this decision.
+      ip_dst = ip_hdr->dst;
+
+      if (ip_dst == WAN_IP_HEX) {
           lan_or_wan = 1;
       }
+      else {
+          lan_or_wan = 0;
+      }
+
+      // 3. Calculate flow hash
+      // For the NAT, the hash is only used for the LAN to WAN conversion
+      // WAN to LAN conversion requires the destination port and is read-only
+      // since the entry gets populated in the table during the LAN to WAN
+      // conversion. TLDR: We don't need consistent hashing on both LAN to WAN
+      // and WAN to LAN
+      flow_4_tuple.ip_src = ip_hdr->src;
+      flow_4_tuple.ip_dst = ip_hdr->dst;
+      flow_4_tuple.l4_src = tcp_hdr->sport;
+      flow_4_tuple.l4_dst = tcp_hdr->dport;
 
       flow_hash = hash_me_crc32(&flow_4_tuple.word64, 12, HASH_SEED_VALUE);
 
@@ -100,7 +95,7 @@ int main() {
 
       // There are 4 worker islands, we need 2 bits to check which island to
       // steer this flow to
-      flow_island = flow_hash & 0x3;
+      flow_island = flow_hash & ISLAND_NUM_MASK;
 
       if (flow_island == 0) {
         rnum = MEM_RING_GET_NUM(flow_ring_0);
