@@ -15,7 +15,6 @@ MEM_RING_INIT(flow_ring_0,  FLOW_GRP_WQ_SIZE);
 MEM_RING_INIT(flow_ring_1,  FLOW_GRP_WQ_SIZE);
 MEM_RING_INIT(flow_ring_2,  FLOW_GRP_WQ_SIZE);
 MEM_RING_INIT(flow_ring_3,  FLOW_GRP_WQ_SIZE);
-MEM_RING_INIT(syn_ring,  FLOW_GRP_WQ_SIZE);
 
 __packed struct work_t
 {
