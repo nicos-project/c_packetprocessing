@@ -34,7 +34,7 @@ __intrinsic uint32_t receive_remote_message(uint8_t signal, uint8_t csr_reg, uin
     }
     if(csr_reg){
         __asm{
-            local_csr_rd[__ct_const_val(local_csr_mailbox0)]
+            local_csr_rd[__ct_const_val(rcv_addr)]
             immed[data, 0]
         }
     }
