@@ -9,7 +9,7 @@
 
 #include "config.h"
 #include "steer.h"
-#include "nat.h"
+#include "lb.h"
 
 #define HASH_SEED_VALUE 0x12345678
 #define ISLAND_NUM_MASK 0x3
@@ -35,7 +35,7 @@ int main() {
   __gpr uint32_t flow_hash;
   __gpr uint32_t ip_dst;
   __gpr struct flow_four_tuple flow_4_tuple;
-  __gpr uint32_t lan_or_wan;
+  __gpr uint32_t from_client;
   __xwrite struct work_t work_xfer;
   __xread struct nbi_meta_catamaran nbi_meta;
   __xread struct nbi_meta_pkt_info *pi = &nbi_meta.pkt_info;
@@ -56,24 +56,20 @@ int main() {
                                                 + sizeof(struct eth_hdr)
                                                 + sizeof(struct ip4_hdr));
 
-      // 2. We need to decide which direction the flow is in (LAN or WAN).
-      // We check the destination IP and see if it matches the WAN IP to make
-      // this decision.
+      // 2. Determine direction: from client to VIP or from backend to client
+      // Traffic to VIRTUAL_IP is from client
+      // All other traffic is assumed to be backend responses
       ip_dst = ip_hdr->dst;
 
-      if (ip_dst == WAN_IP_HEX) {
-          lan_or_wan = 1;
+      if (ip_dst == VIRTUAL_IP) {
+          from_client = 1;  // Client -> Load Balancer
       }
       else {
-          lan_or_wan = 0;
+          from_client = 0;  // Backend -> Client
       }
 
       // 3. Calculate flow hash
-      // For the NAT, the hash is only used for the LAN to WAN conversion
-      // WAN to LAN conversion requires the destination port and is read-only
-      // since the entry gets populated in the table during the LAN to WAN
-      // conversion. TLDR: We don't need consistent hashing on both LAN to WAN
-      // and WAN to LAN
+      // Used for connection tracking and load distribution
       flow_4_tuple.ip_src = ip_hdr->src;
       flow_4_tuple.ip_dst = ip_hdr->dst;
       flow_4_tuple.l4_src = tcp_hdr->sport;
@@ -81,7 +77,7 @@ int main() {
 
       flow_hash = hash_me_crc32(&flow_4_tuple.word64, 12, HASH_SEED_VALUE);
 
-      // 3. Send to another island for processing
+      // 4. Send to worker island for processing
       work.isl = pi->isl;
       work.pnum = pi->pnum;
       work.plen = pi->len;
@@ -89,7 +85,7 @@ int main() {
       work.seq = nbi_meta.seq;
       work.hash = flow_hash;
       work.rx_port = MAC_TO_PORT(nbi_meta.port);
-      work.lan_or_wan = lan_or_wan;
+      work.lan_or_wan = from_client;  // Reusing field for direction
 
       work_xfer = work;
 
@@ -115,3 +111,4 @@ int main() {
   }
   return 0;
 }
+
