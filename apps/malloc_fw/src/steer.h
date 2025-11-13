@@ -27,6 +27,7 @@ __packed struct work_t
   uint32_t plen:11;
   uint32_t rx_port:3;
   uint32_t lan_or_wan:1;
+  uint32_t hash:1;
   ipv4_5_tuple_t five_tuple;
 } __align(4);
 

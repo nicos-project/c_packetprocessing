@@ -21,6 +21,8 @@
 #include "steer.h"
 #include "dependencies/hash-table/flow_table.h"
 #include "dependencies/hash-table/dependencies/libmalloc/malloc.h"
+#include "dependencies/hash-table/dependencies/libmalloc/dependencies/mem40_barrier/mem40_barrier.h"
+#include "dependencies/hash-table/dependencies/mem40_mutex/mem40_mutex.h"
 
 #define CONN_TABLE_NUM_BUCKETS 100
 #define CONN_TABLE_MAX_KEYS_PER_BUCKET 4
@@ -43,6 +45,15 @@ __export __global __ctm_n(36) flow_table_t i36_flow_table;
 __shared __lmem flow_table_t island_flow_table;
 __gpr unsigned int rnum, raddr_hi;
 
+//initialization variables
+__export __global __align64 __emem uint32_t firewall_initialization_lock;
+__export __global __align64 __emem uint32_t initialize_barrier_arrive_num = NUM_THREADS;
+__export __global __align64 __emem uint32_t initialize_barrier_leave_num = 0;
+barrier_t firewall_barrier = {
+    NUM_THREADS,
+    (__mem40 uint32_t *)&initialize_barrier_arrive_num,
+    (__mem40 uint32_t *)&initialize_barrier_leave_num
+};
 
 void semaphore_down(volatile __declspec(mem addr40) void * addr)
 {
@@ -108,27 +119,46 @@ __intrinsic uint8_t find_in_conn_table(uint32_t hash_value, uint32_t table_idx) 
 
 void initialize(){
     int island = __ISLAND;
+    init_malloc();
 
-    if (island == 33) {
-        rnum = MEM_RING_GET_NUM(flow_ring_0);
-        raddr_hi = MEM_RING_GET_MEMADDR(flow_ring_0);
-        island_flow_table = i33_flow_table;
+    if(try_lock((__mem40 uint32_t *)&firewall_initialization_lock)){
+        //only one thread
+        i33_flow_table = ft_constructor(CONN_TABLE_NUM_BUCKETS, ANCHORED_CTM33);
+        i34_flow_table = ft_constructor(CONN_TABLE_NUM_BUCKETS, ANCHORED_CTM34);
+        i35_flow_table = ft_constructor(CONN_TABLE_NUM_BUCKETS, ANCHORED_CTM35);
+        i36_flow_table = ft_constructor(CONN_TABLE_NUM_BUCKETS, ANCHORED_CTM36);
     }
-    else if (island == 34) {
-        rnum = MEM_RING_GET_NUM(flow_ring_1);
-        raddr_hi = MEM_RING_GET_MEMADDR(flow_ring_1);
-        island_flow_table = i34_flow_table;
+
+    //wait for all island flow tables to be constructed
+    synch(firewall_barrier);
+
+    if(__ctx() == 0){
+        if (island == 33) {
+            rnum = MEM_RING_GET_NUM(flow_ring_0);
+            raddr_hi = MEM_RING_GET_MEMADDR(flow_ring_0);
+            island_flow_table = i33_flow_table;
+        }
+        else if (island == 34) {
+            rnum = MEM_RING_GET_NUM(flow_ring_1);
+            raddr_hi = MEM_RING_GET_MEMADDR(flow_ring_1);
+            island_flow_table = i34_flow_table;
+        }
+        else if (island == 35) {
+            rnum = MEM_RING_GET_NUM(flow_ring_2);
+            raddr_hi = MEM_RING_GET_MEMADDR(flow_ring_2);
+            island_flow_table = i35_flow_table;
+        }
+        else if (island == 36) {
+            rnum = MEM_RING_GET_NUM(flow_ring_3);
+            raddr_hi = MEM_RING_GET_MEMADDR(flow_ring_3);
+            island_flow_table = i36_flow_table;
+        } 
     }
-    else if (island == 35) {
-        rnum = MEM_RING_GET_NUM(flow_ring_2);
-        raddr_hi = MEM_RING_GET_MEMADDR(flow_ring_2);
-        island_flow_table = i35_flow_table;
-    }
-    else if (island == 36) {
-        rnum = MEM_RING_GET_NUM(flow_ring_3);
-        raddr_hi = MEM_RING_GET_MEMADDR(flow_ring_3);
-        island_flow_table = i36_flow_table;
-    } 
+
+    /**
+     * Wait for ctx 0 of this ME to get the local copy of the flow table handle
+     */
+    synch(firewall_barrier);
 }
 
 int main(void)
@@ -147,18 +177,17 @@ int main(void)
     __gpr uint32_t ip_tmp;
     __gpr uint16_t port_tmp;
     __declspec(ctm shared) __mem40 char *pbuf;
-    __declspec(ctm shared) __mem40 struct ip4_hdr *ip_hdr;
+    // __declspec(ctm shared) __mem40 struct ip4_hdr *ip_hdr;
     __declspec(ctm shared) __mem40 struct tcp_hdr *tcp_hdr;
-    __declspec(ctm shared) __mem40 uint16_t *l4_src_port;
-    __declspec(ctm shared) __mem40 uint16_t *l4_dst_port;
-    __declspec(ctm shared) __mem40 uint32_t *data;
+    // __declspec(ctm shared) __mem40 uint16_t *l4_src_port;
+    // __declspec(ctm shared) __mem40 uint16_t *l4_dst_port;
+    // __declspec(ctm shared) __mem40 uint32_t *data;
 
     // Connection table stuff
     __gpr uint32_t table_idx;
     __gpr uint8_t present_in_conn_table;
     
-
-    init_malloc();
+    initialize();
     for (;;) {
         __mem_workq_add_thread(rnum, raddr_hi,
                         &work_read,
@@ -177,20 +206,20 @@ int main(void)
 
         pbuf = pkt_ctm_ptr40(island, pnum, 0);
 
-        ip_hdr = (__mem40 struct ip4_hdr *)(pbuf + pkt_off + sizeof(struct eth_hdr));
+        // ip_hdr = (__mem40 struct ip4_hdr *)(pbuf + pkt_off + sizeof(struct eth_hdr));
 
         tcp_hdr = (__mem40 struct tcp_hdr *)(pbuf + pkt_off
                                                     + sizeof(struct eth_hdr)
                                                     + sizeof(struct ip4_hdr));
 
-        l4_src_port  = (__mem40 uint16_t *)(&tcp_hdr->sport);
+        // l4_src_port  = (__mem40 uint16_t *)(&tcp_hdr->sport);
 
-        l4_dst_port  = (__mem40 uint16_t *)(&tcp_hdr->dport);
+        // l4_dst_port  = (__mem40 uint16_t *)(&tcp_hdr->dport);
 
-        data = (__mem40 uint32_t *)(pbuf + pkt_off
-                                            + sizeof(struct eth_hdr)
-                                            + sizeof(struct ip4_hdr)
-                                            + sizeof(struct tcp_hdr));
+        // data = (__mem40 uint32_t *)(pbuf + pkt_off
+        //                                     + sizeof(struct eth_hdr)
+        //                                     + sizeof(struct ip4_hdr)
+        //                                     + sizeof(struct tcp_hdr));
 
 
         if (lan_or_wan == 0) {
@@ -256,16 +285,6 @@ int main(void)
                 // *data = hash_value;
             // }
         }
-
-        // Swap IP addresses
-        // ip_tmp = ip_hdr->src;
-        // ip_hdr->src = ip_hdr->dst;
-        // ip_hdr->dst = ip_tmp;
-
-        // Swap ports
-        // port_tmp = *l4_src_port;
-        // *l4_src_port = *l4_dst_port;
-        // *l4_dst_port = port_tmp;
 
         // Send the packet back
         pkt_mac_egress_cmd_write(pbuf, pkt_off, 1, 1);
