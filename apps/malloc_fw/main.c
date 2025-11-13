@@ -176,11 +176,17 @@ int main(void)
     __gpr int i, j;
     __gpr uint32_t ip_tmp;
     __gpr uint16_t port_tmp;
-    __declspec(ctm shared) __mem40 char *pbuf;
+
+    /**
+     * You dont want this pointer (or the tcp_hdr pointer) to be shared.
+     * This would mean that all threads on the ME see the same pointer and
+     * are trying to use it at the same time.
+     */
+    __declspec(ctm) __mem40 char *pbuf;
     
-    __xwrite ipv4_5_tuple_t tup;   
+    __gpr ipv4_5_tuple_t tup;   
     __lmem char data_buff[DATA_SIZE];
-    __declspec(ctm shared) __mem40 struct tcp_hdr *tcp_hdr;
+    __declspec(ctm) __mem40 struct tcp_hdr *tcp_hdr;
     __gpr uint8_t flags;
 
     // __declspec(ctm shared) __mem40 struct ip4_hdr *ip_hdr;
