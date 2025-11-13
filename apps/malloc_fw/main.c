@@ -31,6 +31,17 @@ struct conn_table_bucket {
 
 // Will aligning this help?
 __declspec(imem export scope(global)) struct conn_table_bucket conn_table[CONN_TABLE_NUM_BUCKETS];
+__export __global __ctm_n(33) flow_table_t i33_flow_table;
+__export __global __ctm_n(34) flow_table_t i34_flow_table;
+__export __global __ctm_n(35) flow_table_t i35_flow_table;
+__export __global __ctm_n(36) flow_table_t i36_flow_table;
+/**
+ * We can cache a local copy of the handle to island flow table because
+ * the data pointed to in this struct will be anchored to island CTM. This means
+ * the pointers in the struct will not move.
+ */
+__shared __lmem flow_table_t island_flow_table;
+__gpr unsigned int rnum, raddr_hi;
 
 
 void semaphore_down(volatile __declspec(mem addr40) void * addr)
@@ -95,12 +106,36 @@ __intrinsic uint8_t find_in_conn_table(uint32_t hash_value, uint32_t table_idx) 
     return present_in_conn_table;
 }
 
+void initialize(){
+    int island = __ISLAND;
+
+    if (island == 33) {
+        rnum = MEM_RING_GET_NUM(flow_ring_0);
+        raddr_hi = MEM_RING_GET_MEMADDR(flow_ring_0);
+        island_flow_table = i33_flow_table;
+    }
+    else if (island == 34) {
+        rnum = MEM_RING_GET_NUM(flow_ring_1);
+        raddr_hi = MEM_RING_GET_MEMADDR(flow_ring_1);
+        island_flow_table = i34_flow_table;
+    }
+    else if (island == 35) {
+        rnum = MEM_RING_GET_NUM(flow_ring_2);
+        raddr_hi = MEM_RING_GET_MEMADDR(flow_ring_2);
+        island_flow_table = i35_flow_table;
+    }
+    else if (island == 36) {
+        rnum = MEM_RING_GET_NUM(flow_ring_3);
+        raddr_hi = MEM_RING_GET_MEMADDR(flow_ring_3);
+        island_flow_table = i36_flow_table;
+    } 
+}
+
 int main(void)
 {
     __gpr struct work_t work;
     __gpr struct pkt_ms_info msi;
     __gpr unsigned int type, island, pnum, plen, seqr, seq;
-    __gpr unsigned int rnum, raddr_hi;
     __gpr uint8_t pkt_off = PKT_NBI_OFFSET + MAC_PREPEND_BYTES;
     __gpr uint8_t rx_port;
     __xread  struct work_t work_read;
@@ -121,159 +156,128 @@ int main(void)
     // Connection table stuff
     __gpr uint32_t table_idx;
     __gpr uint8_t present_in_conn_table;
+    
+
     init_malloc();
+    for (;;) {
+        __mem_workq_add_thread(rnum, raddr_hi,
+                        &work_read,
+                        sizeof(struct work_t), sizeof(struct work_t),
+                        sig_done, &work_sig);
+        __wait_for_all(&work_sig);
 
-    // if (__ctx() == 0) {
-        // Work queue stuff
-        
-        island = __ISLAND;
+        work = work_read;
+        island = work.isl;
+        pnum = work.pnum;
+        plen = work.plen;
+        seqr = work.seqr;
+        seq = work.seq;
+        rx_port = work.rx_port;
+        lan_or_wan = work.lan_or_wan;
 
-        if (island == 33) {
-          rnum = MEM_RING_GET_NUM(flow_ring_0);
-          raddr_hi = MEM_RING_GET_MEMADDR(flow_ring_0);
-        }
-        else if (island == 34) {
-          rnum = MEM_RING_GET_NUM(flow_ring_1);
-          raddr_hi = MEM_RING_GET_MEMADDR(flow_ring_1);
-        }
-        else if (island == 35) {
-          rnum = MEM_RING_GET_NUM(flow_ring_2);
-          raddr_hi = MEM_RING_GET_MEMADDR(flow_ring_2);
-        }
-        else if (island == 36) {
-          rnum = MEM_RING_GET_NUM(flow_ring_3);
-          raddr_hi = MEM_RING_GET_MEMADDR(flow_ring_3);
-        }
+        pbuf = pkt_ctm_ptr40(island, pnum, 0);
 
-        // Ideally this init should be done by just one ME out of all the MEs
-        for (i = 0; i < CONN_TABLE_NUM_BUCKETS; i++) {
-            ct_sem[i] = 1;  // Initialize each bucket's lock
-            for (j = 0; j < CONN_TABLE_MAX_KEYS_PER_BUCKET; j++) {
-                conn_table[i].four_tuple_hash_entry[j] = 0;
-            }
-        }
+        ip_hdr = (__mem40 struct ip4_hdr *)(pbuf + pkt_off + sizeof(struct eth_hdr));
 
-        for (;;) {
-            __mem_workq_add_thread(rnum, raddr_hi,
-                            &work_read,
-                            sizeof(struct work_t), sizeof(struct work_t),
-                            sig_done, &work_sig);
-            __wait_for_all(&work_sig);
+        tcp_hdr = (__mem40 struct tcp_hdr *)(pbuf + pkt_off
+                                                    + sizeof(struct eth_hdr)
+                                                    + sizeof(struct ip4_hdr));
 
-            work = work_read;
-            island = work.isl;
-            pnum = work.pnum;
-            plen = work.plen;
-            seqr = work.seqr;
-            seq = work.seq;
-            rx_port = work.rx_port;
-            lan_or_wan = work.lan_or_wan;
+        l4_src_port  = (__mem40 uint16_t *)(&tcp_hdr->sport);
 
-            pbuf = pkt_ctm_ptr40(island, pnum, 0);
+        l4_dst_port  = (__mem40 uint16_t *)(&tcp_hdr->dport);
 
-            ip_hdr = (__mem40 struct ip4_hdr *)(pbuf + pkt_off + sizeof(struct eth_hdr));
-
-            tcp_hdr = (__mem40 struct tcp_hdr *)(pbuf + pkt_off
-                                                      + sizeof(struct eth_hdr)
-                                                      + sizeof(struct ip4_hdr));
-
-            l4_src_port  = (__mem40 uint16_t *)(&tcp_hdr->sport);
-
-            l4_dst_port  = (__mem40 uint16_t *)(&tcp_hdr->dport);
-
-            data = (__mem40 uint32_t *)(pbuf + pkt_off
-                                             + sizeof(struct eth_hdr)
-                                             + sizeof(struct ip4_hdr)
-                                             + sizeof(struct tcp_hdr));
+        data = (__mem40 uint32_t *)(pbuf + pkt_off
+                                            + sizeof(struct eth_hdr)
+                                            + sizeof(struct ip4_hdr)
+                                            + sizeof(struct tcp_hdr));
 
 
-            if (lan_or_wan == 0) {
-                // We start by checking if the flow is in the connection table
-                // or not. We basically allow all connections on the LAN port
-                //
-                // Perform a lookup in the connection table and see if it is there
-                hash_value = work.hash;
-                table_idx = hash_value & 0x3fff;
+        if (lan_or_wan == 0) {
+            // We start by checking if the flow is in the connection table
+            // or not. We basically allow all connections on the LAN port
+            //
+            // Perform a lookup in the connection table and see if it is there
+            hash_value = work.hash;
+            table_idx = hash_value & 0x3fff;
 
-                // Check if this is a SYN packet
-                // Debug: try different flag checks
-                if (tcp_hdr->flags & NET_TCP_FLAG_SYN) {  // SYN should be bit 1
-                    // SYN packet: acquire lock and write directly
-                    semaphore_down(&ct_sem[table_idx]);
-                    if (ct_bucket_count[table_idx] < CONN_TABLE_MAX_KEYS_PER_BUCKET) {
-                        conn_table[table_idx].four_tuple_hash_entry[ct_bucket_count[table_idx]] = hash_value;
-                        ct_bucket_count[table_idx]++;
-                        // Uncomment to test with firewall-test.py
-                        // *data = 0x12345678;
-                    }
-                    // else {
-                        // Send an explicit signal to the testing program
-                        // that we ran out of keys in the bucket
-                        // Uncomment to test with firewall-test.py
-                        // *data = 0xffffffff;
-                    // }
-                    semaphore_up(&ct_sem[table_idx]);
-
-                    // Mark write operation: set dport to 10000
-                    // *l4_dst_port = 30000;
-                }
-                else {
-                    // Non-SYN packet: only read, no lock needed
-                    present_in_conn_table = find_in_conn_table(hash_value, table_idx);
-
-                    // Mark read operation: set dport to 20000
-                    // *l4_dst_port = 20000;
-                }
-            }
-            else {
-                // WAN port side. The connection should be present in the connection table or else
-                // we block it
-                hash_value = work.hash;
-                table_idx = hash_value & 0x3fff;
-
-                present_in_conn_table = find_in_conn_table(hash_value, table_idx);
-
-                if (present_in_conn_table) {
-                    // found
-                    // we only do useful stuff on the WAN port side with this
-                    // *data = hash_value;
-                    // *data = 0x2;
+            // Check if this is a SYN packet
+            // Debug: try different flag checks
+            if (tcp_hdr->flags & NET_TCP_FLAG_SYN) {  // SYN should be bit 1
+                // SYN packet: acquire lock and write directly
+                semaphore_down(&ct_sem[table_idx]);
+                if (ct_bucket_count[table_idx] < CONN_TABLE_MAX_KEYS_PER_BUCKET) {
+                    conn_table[table_idx].four_tuple_hash_entry[ct_bucket_count[table_idx]] = hash_value;
+                    ct_bucket_count[table_idx]++;
                     // Uncomment to test with firewall-test.py
-                    // *data = 0xabcdef12;
+                    // *data = 0x12345678;
                 }
                 // else {
-                    // we have a problem, someone is trying to intrude?
-                    // drop the packet
+                    // Send an explicit signal to the testing program
+                    // that we ran out of keys in the bucket
                     // Uncomment to test with firewall-test.py
                     // *data = 0xffffffff;
-                    // data += 1;
-                    // *data = hash_value;
                 // }
+                semaphore_up(&ct_sem[table_idx]);
+
+                // Mark write operation: set dport to 10000
+                // *l4_dst_port = 30000;
             }
+            else {
+                // Non-SYN packet: only read, no lock needed
+                present_in_conn_table = find_in_conn_table(hash_value, table_idx);
 
-            // Swap IP addresses
-            // ip_tmp = ip_hdr->src;
-            // ip_hdr->src = ip_hdr->dst;
-            // ip_hdr->dst = ip_tmp;
-
-            // Swap ports
-            // port_tmp = *l4_src_port;
-            // *l4_src_port = *l4_dst_port;
-            // *l4_dst_port = port_tmp;
-
-            // Send the packet back
-            pkt_mac_egress_cmd_write(pbuf, pkt_off, 1, 1);
-            msi = pkt_msd_write(pbuf, pkt_off - 4);
-            pkt_nbi_send(island,
-                         pnum,
-                         &msi,
-                         plen - MAC_PREPEND_BYTES + 4,
-                         0, // NBI is 0
-                         PORT_TO_TMQ(rx_port), // same port as what we received it on
-                         seqr, seq, PKT_CTM_SIZE_256);
+                // Mark read operation: set dport to 20000
+                // *l4_dst_port = 20000;
+            }
         }
-    // }
+        else {
+            // WAN port side. The connection should be present in the connection table or else
+            // we block it
+            hash_value = work.hash;
+            table_idx = hash_value & 0x3fff;
 
+            present_in_conn_table = find_in_conn_table(hash_value, table_idx);
+
+            if (present_in_conn_table) {
+                // found
+                // we only do useful stuff on the WAN port side with this
+                // *data = hash_value;
+                // *data = 0x2;
+                // Uncomment to test with firewall-test.py
+                // *data = 0xabcdef12;
+            }
+            // else {
+                // we have a problem, someone is trying to intrude?
+                // drop the packet
+                // Uncomment to test with firewall-test.py
+                // *data = 0xffffffff;
+                // data += 1;
+                // *data = hash_value;
+            // }
+        }
+
+        // Swap IP addresses
+        // ip_tmp = ip_hdr->src;
+        // ip_hdr->src = ip_hdr->dst;
+        // ip_hdr->dst = ip_tmp;
+
+        // Swap ports
+        // port_tmp = *l4_src_port;
+        // *l4_src_port = *l4_dst_port;
+        // *l4_dst_port = port_tmp;
+
+        // Send the packet back
+        pkt_mac_egress_cmd_write(pbuf, pkt_off, 1, 1);
+        msi = pkt_msd_write(pbuf, pkt_off - 4);
+        pkt_nbi_send(island,
+                        pnum,
+                        &msi,
+                        plen - MAC_PREPEND_BYTES + 4,
+                        0, // NBI is 0
+                        PORT_TO_TMQ(rx_port), // same port as what we received it on
+                        seqr, seq, PKT_CTM_SIZE_256);
+    }
     return 0;
 }
 
