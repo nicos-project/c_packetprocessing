@@ -47,7 +47,7 @@ __gpr unsigned int rnum, raddr_hi;
 
 //initialization variables
 __export __global __align64 __emem uint32_t firewall_initialization_lock;
-__export __global __align64 __emem uint32_t initialize_barrier_arrive_num = NUM_THREADS;
+__export __global __align64 __emem uint32_t initialize_barrier_arrive_num = NUM_THREADS; //This will be wrong when we add movement
 __export __global __align64 __emem uint32_t initialize_barrier_leave_num = 0;
 barrier_t firewall_barrier = {
     NUM_THREADS,
@@ -177,14 +177,18 @@ int main(void)
     __gpr uint32_t ip_tmp;
     __gpr uint16_t port_tmp;
     __declspec(ctm shared) __mem40 char *pbuf;
-    // __declspec(ctm shared) __mem40 struct ip4_hdr *ip_hdr;
+    
+    __xwrite ipv4_5_tuple_t tup;   
+    __lmem char data_buff[DATA_SIZE];
     __declspec(ctm shared) __mem40 struct tcp_hdr *tcp_hdr;
+    __gpr uint8_t flags;
+
+    // __declspec(ctm shared) __mem40 struct ip4_hdr *ip_hdr;
     // __declspec(ctm shared) __mem40 uint16_t *l4_src_port;
     // __declspec(ctm shared) __mem40 uint16_t *l4_dst_port;
     // __declspec(ctm shared) __mem40 uint32_t *data;
 
     // Connection table stuff
-    __gpr uint32_t table_idx;
     __gpr uint8_t present_in_conn_table;
     
     initialize();
@@ -203,7 +207,8 @@ int main(void)
         seq = work.seq;
         rx_port = work.rx_port;
         lan_or_wan = work.lan_or_wan;
-
+        tup = work.five_tuple;
+        
         pbuf = pkt_ctm_ptr40(island, pnum, 0);
 
         // ip_hdr = (__mem40 struct ip4_hdr *)(pbuf + pkt_off + sizeof(struct eth_hdr));
@@ -211,6 +216,8 @@ int main(void)
         tcp_hdr = (__mem40 struct tcp_hdr *)(pbuf + pkt_off
                                                     + sizeof(struct eth_hdr)
                                                     + sizeof(struct ip4_hdr));
+
+        flags = tcp_hdr->flags;
 
         // l4_src_port  = (__mem40 uint16_t *)(&tcp_hdr->sport);
 
@@ -223,52 +230,41 @@ int main(void)
 
 
         if (lan_or_wan == 0) {
-            // We start by checking if the flow is in the connection table
-            // or not. We basically allow all connections on the LAN port
-            //
-            // Perform a lookup in the connection table and see if it is there
-            hash_value = work.hash;
-            table_idx = hash_value & 0x3fff;
+            /**
+             * We start by checking if the flow is in the connection table
+             * or not. We basically allow all connections on the LAN port
+             *
+             * Perform a lookup in the connection table and see if it is there 
+            */ 
 
-            // Check if this is a SYN packet
-            // Debug: try different flag checks
-            if (tcp_hdr->flags & NET_TCP_FLAG_SYN) {  // SYN should be bit 1
-                // SYN packet: acquire lock and write directly
-                semaphore_down(&ct_sem[table_idx]);
-                if (ct_bucket_count[table_idx] < CONN_TABLE_MAX_KEYS_PER_BUCKET) {
-                    conn_table[table_idx].four_tuple_hash_entry[ct_bucket_count[table_idx]] = hash_value;
-                    ct_bucket_count[table_idx]++;
-                    // Uncomment to test with firewall-test.py
-                    // *data = 0x12345678;
-                }
-                // else {
-                    // Send an explicit signal to the testing program
-                    // that we ran out of keys in the bucket
-                    // Uncomment to test with firewall-test.py
-                    // *data = 0xffffffff;
-                // }
-                semaphore_up(&ct_sem[table_idx]);
-
-                // Mark write operation: set dport to 10000
-                // *l4_dst_port = 30000;
+            if(flags & NET_TCP_FLAG_SYN) {  // SYN should be bit 1
+                //insert flow to table with some data
+                data_buff[0] = 1;
+                ft_insert(island_flow_table, tup, (char *) data_buff);
             }
-            else {
-                // Non-SYN packet: only read, no lock needed
-                present_in_conn_table = find_in_conn_table(hash_value, table_idx);
-
-                // Mark read operation: set dport to 20000
-                // *l4_dst_port = 20000;
+            else if(flags & NET_TCP_FLAG_FIN){
+                //LAN side is closing the connection
+                if(ft_lookup(island_flow_table, tup, (char *) data_buff) == 0){
+                    //this packet is retrying to close the connection, let it through
+                }
+                else{
+                    //delete the flow entry for this 5 tuple
+                    ft_delete(island_flow_table, tup);
+                }
+            }
+            else{
+                //any other packet from LAN side can be forwarded without touching the flow table
             }
         }
         else {
-            // WAN port side. The connection should be present in the connection table or else
-            // we block it
-            hash_value = work.hash;
-            table_idx = hash_value & 0x3fff;
+            /**
+             * WAN side packet
+             */
+            present_in_conn_table = ft_lookup(island_flow_table, tup, (char *) data_buff);
+            
+            if(present_in_conn_table || flags & NET_TCP_FLAG_FIN) {
+                //packet can be forwarded: part of ACL or responding to a fin
 
-            present_in_conn_table = find_in_conn_table(hash_value, table_idx);
-
-            if (present_in_conn_table) {
                 // found
                 // we only do useful stuff on the WAN port side with this
                 // *data = hash_value;
@@ -276,14 +272,14 @@ int main(void)
                 // Uncomment to test with firewall-test.py
                 // *data = 0xabcdef12;
             }
-            // else {
+            else {
                 // we have a problem, someone is trying to intrude?
                 // drop the packet
                 // Uncomment to test with firewall-test.py
                 // *data = 0xffffffff;
                 // data += 1;
                 // *data = hash_value;
-            // }
+            }
         }
 
         // Send the packet back
