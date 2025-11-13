@@ -1,3 +1,9 @@
 [submodule "external/flowenv"]
 	path = external/flowenv
 	url = https://github.com/Netronome/flowenv.git
+[submodule "external/libmalloc"]
+	path = external/libmalloc
+	url = git@github.com:nicos-project/libmalloc.git
+[submodule "apps/malloc_fw/dependencies/hash-table"]
+	path = apps/malloc_fw/dependencies/hash-table
+	url = git@github.com:nicos-project/hash-table.git
