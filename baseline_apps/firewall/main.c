@@ -199,27 +199,19 @@ int main(void)
                     if (ct_bucket_count[table_idx] < CONN_TABLE_MAX_KEYS_PER_BUCKET) {
                         conn_table[table_idx].four_tuple_hash_entry[ct_bucket_count[table_idx]] = hash_value;
                         ct_bucket_count[table_idx]++;
-                        // Uncomment to test with firewall-test.py
-                        // *data = 0x12345678;
                     }
-                    // else {
-                        // Send an explicit signal to the testing program
-                        // that we ran out of keys in the bucket
-                        // Uncomment to test with firewall-test.py
-                        // *data = 0xffffffff;
-                    // }
                     semaphore_up(&ct_sem[table_idx]);
 
                     // Mark write operation: set dport to 10000
                     // *l4_dst_port = 30000;
                 }
-                else {
-                    // Non-SYN packet: only read, no lock needed
-                    present_in_conn_table = find_in_conn_table(hash_value, table_idx);
+                // else {
+                //     // Non-SYN packet: only read, no lock needed
+                //     present_in_conn_table = find_in_conn_table(hash_value, table_idx);
 
-                    // Mark read operation: set dport to 20000
-                    // *l4_dst_port = 20000;
-                }
+                //     // Mark read operation: set dport to 20000
+                //     // *l4_dst_port = 20000;
+                // }
             }
             else {
                 // WAN port side. The connection should be present in the connection table or else
