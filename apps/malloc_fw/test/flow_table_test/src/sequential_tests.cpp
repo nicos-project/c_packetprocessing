@@ -1,4 +1,4 @@
-#include "test_cases.h"
+#include "sequential_tests.h"
 #include "pingpong.h"
 #include <stdio.h>
 #include <unistd.h>

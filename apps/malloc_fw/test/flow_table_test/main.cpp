@@ -4,7 +4,7 @@
 #include "src/config.h"
 #include "src/network.h"
 #include "src/flow_table.h"
-#include "src/test_cases.h"
+#include "src/sequential_tests.h"
 
 // Global flow table to track inserted flows
 FlowTable local_table;

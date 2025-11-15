@@ -2,14 +2,14 @@ CXX = g++
 CXXFLAGS = -Wall -Wextra -std=c++11 -O2
 TARGET = flow_table_test
 SRCDIR = src
-OBJS = main.o $(SRCDIR)/network.o $(SRCDIR)/packet.o $(SRCDIR)/flow_table.o $(SRCDIR)/utils.o $(SRCDIR)/pingpong.o $(SRCDIR)/test_cases.o
+OBJS = main.o $(SRCDIR)/network.o $(SRCDIR)/packet.o $(SRCDIR)/flow_table.o $(SRCDIR)/utils.o $(SRCDIR)/pingpong.o $(SRCDIR)/sequential_tests.o
 
 all: $(TARGET)
 
 $(TARGET): $(OBJS)
 	$(CXX) $(CXXFLAGS) -o $(TARGET) $(OBJS)
 
-main.o: main.cpp $(SRCDIR)/config.h $(SRCDIR)/network.h $(SRCDIR)/flow_table.h $(SRCDIR)/test_cases.h
+main.o: main.cpp $(SRCDIR)/config.h $(SRCDIR)/network.h $(SRCDIR)/flow_table.h $(SRCDIR)/sequential_tests.h
 	$(CXX) $(CXXFLAGS) -c main.cpp
 
 $(SRCDIR)/network.o: $(SRCDIR)/network.cpp $(SRCDIR)/network.h
@@ -27,8 +27,8 @@ $(SRCDIR)/utils.o: $(SRCDIR)/utils.cpp $(SRCDIR)/utils.h
 $(SRCDIR)/pingpong.o: $(SRCDIR)/pingpong.cpp $(SRCDIR)/pingpong.h $(SRCDIR)/packet.h $(SRCDIR)/flow_table.h
 	$(CXX) $(CXXFLAGS) -c $(SRCDIR)/pingpong.cpp -o $(SRCDIR)/pingpong.o
 
-$(SRCDIR)/test_cases.o: $(SRCDIR)/test_cases.cpp $(SRCDIR)/test_cases.h $(SRCDIR)/pingpong.h $(SRCDIR)/flow_table.h
-	$(CXX) $(CXXFLAGS) -c $(SRCDIR)/test_cases.cpp -o $(SRCDIR)/test_cases.o
+$(SRCDIR)/sequential_tests.o: $(SRCDIR)/sequential_tests.cpp $(SRCDIR)/sequential_tests.h $(SRCDIR)/pingpong.h $(SRCDIR)/flow_table.h
+	$(CXX) $(CXXFLAGS) -c $(SRCDIR)/sequential_tests.cpp -o $(SRCDIR)/sequential_tests.o
 
 clean:
 	rm -f $(TARGET) $(OBJS)
