@@ -88,9 +88,9 @@ Tests LOOKUP on flows that were never inserted
 **Tests**: 1 | **Focus**: Negative lookup
 
 ### Test Case 6: Different Source Ports
-Tests 5 flows from same source IP but different ports
+Tests 100 flows from same source IP but different ports
 
-**Tests**: 10 | **Focus**: Port differentiation
+**Tests**: 200 | **Focus**: Port differentiation
 
 ### Test Case 7: Different Destination Ports
 Tests flows to different destination ports (80, 443, 8080, 8443, 3000)
@@ -112,19 +112,19 @@ Tests deleting some flows while keeping others:
 **Tests**: 10 | **Focus**: Selective deletion
 
 ### Test Case 10: Stress Test - Many Flows
-Tests with 20 flows:
-1. INSERT 20 flows
-2. LOOKUP all 20 flows
-3. DELETE all 20 flows
+Tests with **1000 flows**:
+1. INSERT 1000 flows
+2. LOOKUP all 1000 flows
+3. DELETE all 1000 flows
 
-**Tests**: 60 | **Focus**: Scalability
+**Tests**: 3000 | **Focus**: Scalability & Performance
 
 ### Test Case 11: Sequential Port Numbers
-Tests flows with sequential port numbers (like port scan):
-1. INSERT 10 flows with sequential ports
+Tests 200 flows with sequential port numbers (like port scan):
+1. INSERT 200 flows with sequential ports
 2. LOOKUP in reverse order
 
-**Tests**: 20 | **Focus**: Sequential patterns
+**Tests**: 400 | **Focus**: Sequential patterns
 
 ### Test Case 12: Re-INSERT After DELETE
 Tests inserting the same flow again after deleting it:
@@ -138,9 +138,10 @@ Tests inserting the same flow again after deleting it:
 ## Total Test Coverage
 
 - **Total Test Cases**: 12
-- **Total Individual Tests**: ~134 tests
-- **Flows Tested**: Single flows to 20+ concurrent flows
+- **Total Individual Tests**: ~3,631 tests
+- **Flows Tested**: Single flows to **1000+ concurrent flows**
 - **Operations Tested**: INSERT, LOOKUP, DELETE, and combinations
+- **Scalability**: Stress test with 1000 flows validates production-scale performance
 
 ## Key Design Points
 

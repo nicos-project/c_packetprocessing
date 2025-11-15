@@ -1,6 +1,6 @@
 CXX = g++
 CXXFLAGS = -Wall -Wextra -std=c++11 -O2
-TARGET = bucket_test
+TARGET = flow_table_test
 SRCDIR = src
 OBJS = main.o $(SRCDIR)/network.o $(SRCDIR)/packet.o $(SRCDIR)/flow_table.o $(SRCDIR)/utils.o $(SRCDIR)/pingpong.o $(SRCDIR)/test_cases.o
 

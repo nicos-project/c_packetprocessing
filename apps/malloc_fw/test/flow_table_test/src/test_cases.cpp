@@ -242,40 +242,55 @@ bool test_case_6_different_src_ports(int sockfd, int ifindex,
     print_test_header("Different Source Ports", 6);
     bool all_passed = true;
 
-    const int num_flows = 5;
-    uint16_t ports[num_flows] = {50001, 50002, 50003, 50004, 50005};
+    const int num_flows = 100;
+    const uint16_t base_port = 50001;
 
-    // 6.1-6.5: INSERT flows with different source ports
+    printf("\n[6] Testing %d flows with different source ports\n", num_flows);
+
+    // INSERT flows with different source ports
+    printf("\n  Phase 1: Inserting %d flows...\n", num_flows);
     for (int i = 0; i < num_flows; i++) {
-        printf("\n[6.%d] INSERT flow 192.168.1.1:%d -> 12.11.10.9:80\n", i + 1, ports[i]);
-        if (pingpong_insert(sockfd, ifindex, local_table, "192.168.1.1", ports[i], "12.11.10.9", 80)) {
+        uint16_t port = base_port + i;
+        if (pingpong_insert(sockfd, ifindex, local_table, "192.168.1.1", port, "12.11.10.9", 80)) {
             stats.passed++;
         } else {
             stats.failed++;
             all_passed = false;
         }
         stats.total++;
-        usleep(100000);
+        usleep(1000); // 1ms delay
+
+        // Progress indicator every 20 flows
+        if ((i + 1) % 20 == 0) {
+            printf("    Progress: %d/%d flows inserted\n", i + 1, num_flows);
+        }
     }
 
     // LOOKUP all flows
+    printf("\n  Phase 2: Looking up %d flows...\n", num_flows);
     for (int i = 0; i < num_flows; i++) {
-        printf("\n[6.%d] LOOKUP flow with port %d\n", num_flows + i + 1, ports[i]);
-        if (pingpong_lookup(sockfd, ifindex, local_table, "12.11.10.9", 80, "192.168.1.1", ports[i])) {
+        uint16_t port = base_port + i;
+        if (pingpong_lookup(sockfd, ifindex, local_table, "12.11.10.9", 80, "192.168.1.1", port)) {
             stats.passed++;
         } else {
             stats.failed++;
             all_passed = false;
         }
         stats.total++;
-        usleep(100000);
+        usleep(1000); // 1ms delay
+
+        // Progress indicator every 20 flows
+        if ((i + 1) % 20 == 0) {
+            printf("    Progress: %d/%d flows looked up\n", i + 1, num_flows);
+        }
     }
 
     // Cleanup
-    printf("\n[Cleanup] Deleting all flows\n");
+    printf("\n  Phase 3: Cleaning up %d flows...\n", num_flows);
     for (int i = 0; i < num_flows; i++) {
-        pingpong_delete(sockfd, ifindex, local_table, "192.168.1.1", ports[i], "12.11.10.9", 80);
-        usleep(100000);
+        uint16_t port = base_port + i;
+        pingpong_delete(sockfd, ifindex, local_table, "192.168.1.1", port, "12.11.10.9", 80);
+        usleep(1000); // 1ms delay
     }
 
     return all_passed;
@@ -517,50 +532,74 @@ bool test_case_10_stress_test(int sockfd, int ifindex,
     print_test_header("Stress Test - Many Flows", 10);
     bool all_passed = true;
 
-    const int num_flows = 20;
+    const int num_flows = 1000;
     printf("\n[10] INSERT, LOOKUP, and DELETE %d flows\n", num_flows);
 
     // INSERT many flows
     printf("\n  Phase 1: Inserting %d flows...\n", num_flows);
+    int insert_success = 0;
     for (int i = 0; i < num_flows; i++) {
         uint16_t port = 53000 + i;
         if (pingpong_insert(sockfd, ifindex, local_table, "192.168.1.1", port, "12.11.10.9", 80)) {
             stats.passed++;
+            insert_success++;
         } else {
             stats.failed++;
             all_passed = false;
         }
         stats.total++;
-        usleep(50000); // Shorter delay for stress test
+        usleep(1000); // 1ms delay for stress test
+
+        // Progress indicator every 100 flows
+        if ((i + 1) % 100 == 0) {
+            printf("    Progress: %d/%d flows inserted\n", i + 1, num_flows);
+        }
     }
+    printf("  Inserted %d/%d flows successfully\n", insert_success, num_flows);
 
     // LOOKUP all flows
     printf("\n  Phase 2: Looking up %d flows...\n", num_flows);
+    int lookup_success = 0;
     for (int i = 0; i < num_flows; i++) {
         uint16_t port = 53000 + i;
         if (pingpong_lookup(sockfd, ifindex, local_table, "12.11.10.9", 80, "192.168.1.1", port)) {
             stats.passed++;
+            lookup_success++;
         } else {
             stats.failed++;
             all_passed = false;
         }
         stats.total++;
-        usleep(50000);
+        usleep(1000); // 1ms delay
+
+        // Progress indicator every 100 flows
+        if ((i + 1) % 100 == 0) {
+            printf("    Progress: %d/%d flows looked up\n", i + 1, num_flows);
+        }
     }
+    printf("  Found %d/%d flows successfully\n", lookup_success, num_flows);
 
     // DELETE all flows
     printf("\n  Phase 3: Deleting %d flows...\n", num_flows);
+    int delete_success = 0;
     for (int i = 0; i < num_flows; i++) {
         uint16_t port = 53000 + i;
         if (pingpong_delete(sockfd, ifindex, local_table, "192.168.1.1", port, "12.11.10.9", 80)) {
             stats.passed++;
+            delete_success++;
         } else {
             stats.failed++;
             all_passed = false;
         }
         stats.total++;
-        usleep(50000);
+        usleep(1000); // 1ms delay
+
+        // Progress indicator every 100 flows
+        if ((i + 1) % 100 == 0) {
+            printf("    Progress: %d/%d flows deleted\n", i + 1, num_flows);
+        }
     }
+    printf("  Deleted %d/%d flows successfully\n", delete_success, num_flows);
 
     printf("\n  [INFO] Stress test completed: %d flows processed\n", num_flows);
 
@@ -574,10 +613,13 @@ bool test_case_11_sequential_ports(int sockfd, int ifindex,
     bool all_passed = true;
 
     const uint16_t start_port = 54000;
-    const int num_flows = 10;
+    const int num_flows = 200;
+
+    printf("\n[11] Testing %d flows with sequential ports %d-%d\n",
+           num_flows, start_port, start_port + num_flows - 1);
 
     // INSERT flows with sequential ports
-    printf("\n[11.1] INSERT flows with sequential ports %d-%d\n", start_port, start_port + num_flows - 1);
+    printf("\n  Phase 1: Inserting %d flows with sequential ports...\n", num_flows);
     for (int i = 0; i < num_flows; i++) {
         uint16_t port = start_port + i;
         if (pingpong_insert(sockfd, ifindex, local_table, "192.168.1.1", port, "12.11.10.9", 80)) {
@@ -587,11 +629,16 @@ bool test_case_11_sequential_ports(int sockfd, int ifindex,
             all_passed = false;
         }
         stats.total++;
-        usleep(50000);
+        usleep(1000); // 1ms delay
+
+        // Progress indicator every 50 flows
+        if ((i + 1) % 50 == 0) {
+            printf("    Progress: %d/%d flows inserted\n", i + 1, num_flows);
+        }
     }
 
     // LOOKUP in reverse order
-    printf("\n[11.2] LOOKUP flows in reverse order\n");
+    printf("\n  Phase 2: Looking up %d flows in reverse order...\n", num_flows);
     for (int i = num_flows - 1; i >= 0; i--) {
         uint16_t port = start_port + i;
         if (pingpong_lookup(sockfd, ifindex, local_table, "12.11.10.9", 80, "192.168.1.1", port)) {
@@ -601,15 +648,20 @@ bool test_case_11_sequential_ports(int sockfd, int ifindex,
             all_passed = false;
         }
         stats.total++;
-        usleep(50000);
+        usleep(1000); // 1ms delay
+
+        // Progress indicator every 50 flows
+        if ((num_flows - i) % 50 == 0) {
+            printf("    Progress: %d/%d flows looked up\n", num_flows - i, num_flows);
+        }
     }
 
     // Cleanup
-    printf("\n[Cleanup] Deleting all flows\n");
+    printf("\n  Phase 3: Cleaning up %d flows...\n", num_flows);
     for (int i = 0; i < num_flows; i++) {
         uint16_t port = start_port + i;
         pingpong_delete(sockfd, ifindex, local_table, "192.168.1.1", port, "12.11.10.9", 80);
-        usleep(50000);
+        usleep(1000); // 1ms delay
     }
 
     return all_passed;
