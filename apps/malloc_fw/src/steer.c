@@ -11,7 +11,7 @@
 #include "steer.h"
 #include "dependencies/hash-table/flow_table.h"
 
-#define HASH_SEED_VALUE 0x12345678
+#define HASH_SEED_VALUE 0
 
 struct flow_four_tuple {
     union {
@@ -79,9 +79,9 @@ int main() {
       flow_5_tuple.sport = tcp_hdr->sport;
       flow_5_tuple.dport = tcp_hdr->dport;
       flow_5_tuple.proto = 0x06;
-      // flow_5_tuple.padding[0] = 0;
-      // flow_5_tuple.padding[1] = 0;
-      // flow_5_tuple.padding[2] = 0;
+      flow_5_tuple.padding[0] = 0;
+      flow_5_tuple.padding[1] = 0;
+      flow_5_tuple.padding[2] = 0;
       lan_or_wan = 0;
     }
     else {
@@ -91,9 +91,9 @@ int main() {
       flow_5_tuple.sport = tcp_hdr->dport;
       flow_5_tuple.dport = tcp_hdr->sport;
       flow_5_tuple.proto = 0x06;
-      // flow_5_tuple.padding[0] = 0;
-      // flow_5_tuple.padding[1] = 0;
-      // flow_5_tuple.padding[2] = 0;
+      flow_5_tuple.padding[0] = 0;
+      flow_5_tuple.padding[1] = 0;
+      flow_5_tuple.padding[2] = 0;
       lan_or_wan = 1;
     }
 
@@ -101,7 +101,7 @@ int main() {
      * Use 16 here to hash the entire 5-tuple structure (including protocol and padding).
      * This must match the hash length used in flow_table.c
     */
-    flow_hash = hash_me_crc32((void *)&flow_5_tuple, 12, HASH_SEED_VALUE);
+    flow_hash = hash_me_crc32((void *)&flow_5_tuple, 16, HASH_SEED_VALUE);
 
     // 3. Send to another island for processing
     work.isl = pi->isl;
