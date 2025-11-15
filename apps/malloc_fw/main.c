@@ -272,23 +272,23 @@ int main(void)
             
             if(present_in_conn_table || flags & NET_TCP_FLAG_FIN) {
                 tcp_hdr->flags = NET_TCP_FLAG_SYN;
-                //packet can be forwarded: part of ACL or responding to a fin
+            //     //packet can be forwarded: part of ACL or responding to a fin
 
-                // found
-                // we only do useful stuff on the WAN port side with this
-                // *data = hash_value;
-                // *data = 0x2;
-                // Uncomment to test with firewall-test.py
-                // *data = 0xabcdef12;
+            //     // found
+            //     // we only do useful stuff on the WAN port side with this
+            //     // *data = hash_value;
+            //     // *data = 0x2;
+            //     // Uncomment to test with firewall-test.py
+            //     // *data = 0xabcdef12;
             }
             else {
                 tcp_hdr->flags = NET_TCP_FLAG_FIN;
-                // we have a problem, someone is trying to intrude?
-                // drop the packet
-                // Uncomment to test with firewall-test.py
-                // *data = 0xffffffff;
-                // data += 1;
-                // *data = hash_value;
+            //     // we have a problem, someone is trying to intrude?
+            //     // drop the packet
+            //     // Uncomment to test with firewall-test.py
+            //     // *data = 0xffffffff;
+            //     // data += 1;
+            //     // *data = hash_value;
             }
         }
 
