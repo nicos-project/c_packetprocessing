@@ -25,14 +25,7 @@
 #include "dependencies/hash-table/dependencies/mem40_mutex/mem40_mutex.h"
 
 #define CONN_TABLE_NUM_BUCKETS 100
-#define CONN_TABLE_MAX_KEYS_PER_BUCKET 4
-struct conn_table_bucket {
-    // Each bucket basically holds four keys
-    uint32_t four_tuple_hash_entry[CONN_TABLE_MAX_KEYS_PER_BUCKET];
-};
 
-// Will aligning this help?
-__declspec(imem export scope(global)) struct conn_table_bucket conn_table[CONN_TABLE_NUM_BUCKETS];
 __export __global __ctm_n(33) flow_table_t i33_flow_table;
 __export __global __ctm_n(34) flow_table_t i34_flow_table;
 __export __global __ctm_n(35) flow_table_t i35_flow_table;
@@ -54,68 +47,6 @@ barrier_t firewall_barrier = {
     (__mem40 uint32_t *)&initialize_barrier_arrive_num,
     (__mem40 uint32_t *)&initialize_barrier_leave_num
 };
-
-void semaphore_down(volatile __declspec(mem addr40) void * addr)
-{
-    /* semaphore "DOWN" = claim = wait */
-    unsigned int addr_hi, addr_lo;
-    __declspec(read_write_reg) int xfer;
-    SIGNAL_PAIR my_signal_pair;
-
-    addr_hi = ((unsigned long long int)addr >> 8) & 0xff000000;
-    addr_lo = (unsigned long long int)addr & 0xffffffff;
-
-    do {
-        xfer = 1;
-        __asm {
-            mem[test_subsat, xfer, addr_hi, <<8, addr_lo, 1], \
-                sig_done[my_signal_pair];
-            ctx_arb[my_signal_pair]
-        }
-    } while (xfer == 0);
-}
-
-void semaphore_up(volatile __declspec(mem addr40) void * addr)
-{
-    /* semaphore "UP" = release = signal */
-    unsigned int addr_hi, addr_lo;
-    __declspec(read_write_reg) int xfer;
-
-    addr_hi = ((unsigned long long int)addr >> 8) & 0xff000000;
-    addr_lo = (unsigned long long int)addr & 0xffffffff;
-
-    __asm {
-        mem[incr, --, addr_hi, <<8, addr_lo, 1];
-    }
-}
-
-// Global connection state
-// We split this between the different islands: each island serves a unique set of flows due to
-// the steering island assigning flows based on the four tuple hash. Each island has 8 MEs serving
-// a set of flows, and more than one ME may end up serving a single flow. That is why we need an island
-// scope lock on the ct_bucket_count and conn_table data structures.
-// Each bucket has its own lock in imem for fine-grained concurrency control.
-__declspec(imem export scope(island)) int ct_sem[CONN_TABLE_NUM_BUCKETS];
-__declspec(imem export scope(global)) uint8_t ct_bucket_count[CONN_TABLE_NUM_BUCKETS];
-
-__intrinsic uint8_t find_in_conn_table(uint32_t hash_value, uint32_t table_idx) {
-    __gpr uint32_t cur_idx = 0;
-    __gpr uint8_t present_in_conn_table = 0;
-    while (cur_idx < CONN_TABLE_MAX_KEYS_PER_BUCKET) {
-        if (conn_table[table_idx].four_tuple_hash_entry[cur_idx] == hash_value) {
-            present_in_conn_table = 1;
-            break;
-        }
-        else if (conn_table[table_idx].four_tuple_hash_entry[cur_idx] == 0) {
-            // we initialize all entries to zero in the start
-            // and add them sequentially, so if we found a 0 entry
-            // we can break since there are no entries further down
-            break;
-        }
-        cur_idx++;
-    }
-    return present_in_conn_table;
-}
 
 void initialize(){
     int island = __ISLAND;
