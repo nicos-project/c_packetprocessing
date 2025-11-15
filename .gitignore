@@ -6,4 +6,5 @@
 *.list
 *.obj
 *.map
+*.csv
 .vscode
