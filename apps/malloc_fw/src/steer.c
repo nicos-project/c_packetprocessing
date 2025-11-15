@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <net/eth.h>
 #include <net/ip.h>
-#include <net/udp.h>
+#include <net/tcp.h>
 #include <std/hash.h>
 
 #include "config.h"
@@ -18,8 +18,8 @@ struct flow_four_tuple {
         struct {
             uint32_t ip_src;
             uint32_t ip_dst;
-            uint16_t udp_src;
-            uint16_t udp_dst;
+            uint16_t tcp_src;
+            uint16_t tcp_dst;
         };
         uint64_t word64[2];
     };
@@ -39,7 +39,7 @@ int main() {
   __xread struct nbi_meta_catamaran nbi_meta;
   __xread struct nbi_meta_pkt_info *pi = &nbi_meta.pkt_info;
   __declspec(ctm) __mem40 struct ip4_hdr *ip_hdr;
-  __declspec(ctm) __mem40 struct udp_hdr *udp_hdr;
+  __declspec(ctm) __mem40 struct tcp_hdr *tcp_hdr;
   __declspec(ctm) __mem40 char *pbuf;
   ipv4_5_tuple_t flow_5_tuple;
 
@@ -50,7 +50,7 @@ int main() {
 
     ip_hdr = (__mem40 struct ip4_hdr *)(pbuf + pkt_off + sizeof(struct eth_hdr));
 
-    udp_hdr = (__mem40 struct udp_hdr *)(pbuf + pkt_off
+    tcp_hdr = (__mem40 struct tcp_hdr *)(pbuf + pkt_off
                                               + sizeof(struct eth_hdr)
                                               + sizeof(struct ip4_hdr));
     // 2. Calculate flow hash
@@ -76,24 +76,30 @@ int main() {
       // Traffic originating on the LAN port
       flow_5_tuple.src_ip = ip_hdr->src;
       flow_5_tuple.dst_ip = ip_hdr->dst;
-      flow_5_tuple.sport = udp_hdr->sport;
-      flow_5_tuple.dport = udp_hdr->dport;
-      flow_5_tuple.proto = 0x11;
+      flow_5_tuple.sport = tcp_hdr->sport;
+      flow_5_tuple.dport = tcp_hdr->dport;
+      flow_5_tuple.proto = 0x06;
+      // flow_5_tuple.padding[0] = 0;
+      // flow_5_tuple.padding[1] = 0;
+      // flow_5_tuple.padding[2] = 0;
       lan_or_wan = 0;
     }
     else {
       // Traffic originating on the WAN port
       flow_5_tuple.src_ip = ip_hdr->dst;
       flow_5_tuple.dst_ip = ip_hdr->src;
-      flow_5_tuple.sport = udp_hdr->dport;
-      flow_5_tuple.dport = udp_hdr->sport;
-      flow_5_tuple.proto = 0x11;
+      flow_5_tuple.sport = tcp_hdr->dport;
+      flow_5_tuple.dport = tcp_hdr->sport;
+      flow_5_tuple.proto = 0x06;
+      // flow_5_tuple.padding[0] = 0;
+      // flow_5_tuple.padding[1] = 0;
+      // flow_5_tuple.padding[2] = 0;
       lan_or_wan = 1;
     }
 
     /**
-     * Use 12 here to only hash over the ip and port numbers, not the protocol number. This function wont allow you to
-     * hash 13 bytes. It only accepts n % 4 == 0
+     * Use 16 here to hash the entire 5-tuple structure (including protocol and padding).
+     * This must match the hash length used in flow_table.c
     */
     flow_hash = hash_me_crc32((void *)&flow_5_tuple, 12, HASH_SEED_VALUE);
 

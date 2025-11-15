@@ -36,15 +36,30 @@ class PacketSender(threading.Thread):
             # Calculate new IP by adding client_idx to the base IP
             new_ip_hex = base_ip_hex
             # Convert back to dotted decimal notation
-            src_ip = f"{(new_ip_hex >> 24) & 0xFF}.{(new_ip_hex >> 16) & 0xFF}.{(new_ip_hex >> 8) & 0xFF}.{new_ip_hex & 0xFF}"
-            src_port = 49000 + cur_flow
-            dst_ip = "12.11.10.9"
-            dst_port = 80
-            # First packet has SYN flag set to 1, rest have SYN flag set to 0
+            base_src_ip = f"{(new_ip_hex >> 24) & 0xFF}.{(new_ip_hex >> 16) & 0xFF}.{(new_ip_hex >> 8) & 0xFF}.{new_ip_hex & 0xFF}"
+            base_src_port = 49000 + cur_flow
+            base_dst_ip = "12.11.10.9"
+            base_dst_port = 80
+            
+            # Second packet swaps src and dst
+            if cur_count == 1:
+                src_ip = base_dst_ip
+                src_port = base_dst_port
+                dst_ip = base_src_ip
+                dst_port = base_src_port
+            else:
+                src_ip = base_src_ip
+                src_port = base_src_port
+                dst_ip = base_dst_ip
+                dst_port = base_dst_port
+            
+            # First packet has SYN flag, last packet has FIN flag, rest have ACK flag
             if cur_count == 0:
                 flags = "S"  # SYN flag = 1 for first packet
+            elif cur_count == count - 1:
+                flags = "FA"  # FIN+ACK flags for last packet
             else:
-                flags = "A"  # ACK flag only, SYN = 0 for remaining packets
+                flags = "A"  # ACK flag only for middle packets
             p = Ether() / IP(src = src_ip, dst = dst_ip) / TCP(sport = src_port, dport = dst_port, flags=flags) / Raw(b"\x00" * 18)
             sendp(p, iface=iface, verbose=0)
             cur_count += 1
